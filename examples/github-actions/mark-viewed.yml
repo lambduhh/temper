@@ -8,6 +8,11 @@
 #   - secret REVIEWER_TOKEN: a fine-grained token of the reviewer's with
 #     Contents read/write and Pull requests read on this repo, plus Contents read
 #     on any private repo the build depends on (e.g. temper itself)
+#
+# Trust: the job runs the PR branch's bb.edn (and the deps it names) with the
+# reviewer's token available. Only use this in repos where every PR author is
+# trusted. It is limited to same-repo PRs and to reviews by REVIEWER_LOGIN.
+#
 # The repo's bb.edn needs a task that calls temper.okf.review, e.g.
 #   docs:mark-viewed {:requires ([temper.okf.review]) :task (apply temper.okf.review/-main *command-line-args*)}
 name: Mark viewed docs as reviewed
@@ -16,22 +21,33 @@ on:
     types: [submitted]
 permissions:
   contents: write
+concurrency:
+  # Shared with review-drift.yml, so the two never push to a PR at once.
+  group: okf-docs-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 jobs:
   mark-viewed:
-    if: vars.REVIEWER_LOGIN != '' && github.event.review.user.login == vars.REVIEWER_LOGIN
+    if: >-
+      vars.REVIEWER_LOGIN != '' &&
+      github.event.review.user.login == vars.REVIEWER_LOGIN &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.REVIEWER_TOKEN }}
-      - name: Install babashka
-        run: curl -sL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb && sudo bash install-bb
+          fetch-depth: 0   # review compares against the reviewed version in history
+      - name: Install babashka (pinned, checksum-verified, outside the checkout)
+        run: |
+          curl -sL https://raw.githubusercontent.com/babashka/babashka/v1.12.215/install -o /tmp/install-bb
+          sudo bash /tmp/install-bb --version 1.12.215 \
+            --checksum b1b975a54bff97d2ec1b0d712b34368d6add00bf5d3ca56fb2fa5f8f88526d45
       - name: Raise viewed docs to L2
         env:
           GH_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
         run: |
-          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
           git config user.name "${{ vars.REVIEWER_NAME }}"
           git config user.email "${{ vars.REVIEWER_EMAIL }}"
           bb docs:mark-viewed ${{ github.event.pull_request.number }} --commit --push

@@ -31,6 +31,8 @@ API, and golden tests hold them to the behaviour of the scripts they replace.
 | [`temper.okf.new-doc`](src/temper/okf/new_doc.clj) | `tools/new_doc.bb` | Writes a new document with valid frontmatter |
 | [`temper.okf.review`](src/temper/okf/review.clj) | — | Raises docs you marked **Viewed** in a GitHub PR to L2 (see [Review from a PR](#review-from-a-pr)) |
 | [`temper.okf.drift`](src/temper/okf/drift.clj) | — | Lowers reviewed docs whose words changed past a threshold since review (see [Lowering stale reviews](#lowering-stale-reviews)) |
+| [`temper.okf.frontmatter`](src/temper/okf/frontmatter.clj) | — | Reads and edits frontmatter as text: split, parsed values, key rewrites that keep order and replace block scalars whole |
+| [`temper.okf.history`](src/temper/okf/history.clj) | — | Finds the reviewed version of a doc in git history; checks for a work tree with full history |
 | [`temper.okf.config`](src/temper/okf/config.clj) | — | Path resolution, schema reading, configuration errors |
 | [`temper.okf.schema`](src/temper/okf/schema.clj) | — | Views derived from the schema (maturity ladder, hints) |
 | [`temper.okf.cli`](src/temper/okf/cli.clj) | — | Flag parsing and process exit for each `-main` |
@@ -44,42 +46,66 @@ Tick **Viewed** on a doc in a pull request, then run:
 
 ```sh
 bb review 4 --dry-run          # show what would change
-bb review 4 --commit --push    # raise them, commit to the PR branch, push
+bb review 4 --commit --push    # write, commit to the PR branch, push
 ```
 
-For each Markdown file under the docs dir that **you** marked Viewed and whose `review_maturity` is below the target (`--target`, default `L2`), it sets three frontmatter lines:
+For each Markdown file under the docs dir that **you** marked Viewed:
 
-| Key | Value |
+| The doc is | What happens |
 |---|---|
-| `review_maturity` | the target, with its label, e.g. `L2 (Human-reviewed)` |
-| `reviewed_at` | today |
-| `review_note` | `"Viewed by <login> in PR #<n> on <date>."` |
+| below the target (`--target`, default `L2`) | **raised**: `review_maturity` becomes the target with its label, e.g. `L2 (Human-reviewed)`; `reviewed_at` and `review_note` are set |
+| at or above the target, changed since its last review | **refreshed**: `reviewed_at` and `review_note` are set and the level is kept, so drift measures from the version you just viewed |
+| at or above the target, unchanged since review | left alone |
+| a reserved file (`index.md`, `log.md`) or without frontmatter | skipped |
 
-It never lowers a level, and leaves files with no frontmatter alone. A file changed after you viewed it shows as *dismissed* rather than viewed, so only the version you saw is raised. `--commit` refuses to run unless the current branch is the PR's head branch.
+- **`reviewed_at` is a UTC timestamp** (`2026-11-11T23:41:05Z`), so every review changes it, even a second one on the same day. Drift finds the reviewed version by that change. The validator reads the date part.
+- **`review_note`:** `"Viewed by <login> in PR #<n> on <date>."`
+- **It never lowers a level.** A file changed on GitHub after you viewed it shows as *dismissed*, not viewed, so only the version you saw counts.
+- **`--commit` checks first, and writes nothing if any check fails:**
+  - the current branch and `HEAD` are the PR's head branch and commit as GitHub shows them;
+  - the PR isn't from a fork;
+  - nothing else is staged;
+  - none of the docs it will change has local edits you didn't see on GitHub.
+
+  It commits only the files it changed. `--push` retries with `git pull --rebase` up to 3 times.
 
 **Why it runs with your login:** GitHub shows a file's Viewed state (`viewerViewedState`) only to the person who ticked it, and sends no event when it changes. The tool uses `gh api graphql` with your `gh` login.
 
-**To run it automatically on review:** [`examples/github-actions/mark-viewed.yml`](examples/github-actions/mark-viewed.yml) runs `--commit --push` when you submit a PR review. Its header lists the repo variables and the token secret it needs. It stays skipped until `REVIEWER_LOGIN` is set.
+**To run it automatically on review:** [`examples/github-actions/mark-viewed.yml`](examples/github-actions/mark-viewed.yml) runs `--commit --push` when you submit a PR review. Its header lists the variables and the token secret it needs, and the trust it assumes. It stays skipped until `REVIEWER_LOGIN` is set.
 
 ## Lowering stale reviews
 
-A review covers one version of a doc. `bb drift` finds, for each doc at or above `:review-staleness :from` (L2), the most recent commit that changed its `reviewed_at` line, and compares that version's body with the current body **by words**. Frontmatter is ignored on both sides.
+A review covers one version of a doc. For each doc at or above `:review-staleness :from` (L2), `bb drift` finds the commit that introduced its current `reviewed_at` value, and compares that version's body with the current body **by words**. Frontmatter is ignored on both sides.
 
 ```sh
-bb drift --check   # report docs that would be lowered (exit 1 if any)
-bb drift           # lower them
+bb drift --check                    # report docs that would be lowered (exit 1 if any)
+bb drift                            # lower them
+bb drift --changed-since origin/main  # only docs changed since a ref (what the PR workflow does)
 ```
 
 If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
 
 - **The measure:** (words deleted + words inserted) / words at review, capped at 100%.
-- **How it's computed:** the shared prefix and suffix are dropped first. A bag-of-words lower bound settles rewrites in O(n). A Myers diff, stopped at the threshold, handles near misses. Above the threshold it reports "at least" the threshold rather than an exact share.
+- **How it's computed:**
+  - the shared prefix and suffix are dropped first;
+  - a bag-of-words lower bound settles rewrites in O(n);
+  - a Myers diff, stopped at the threshold, handles near misses. Above the threshold it reports "at least" the threshold rather than an exact share.
+- **Finding the reviewed version:**
+  - renames are followed;
+  - values are compared parsed, so re-quoting the date, or a body line that starts with `reviewed_at:`, doesn't move it.
 - **Skipped:**
   - docs whose `reviewed_at` was never committed;
   - docs whose `reviewed_at` changed but isn't committed yet (a re-review in progress).
+- **Refuses to run (exit 2):**
+  - outside a git work tree;
+  - in a shallow clone, where history is needed (use `fetch-depth: 0` in CI);
+  - with a schema lacking `:review-drift`;
+  - with a `:to` at or above the floor, which would lower the same doc again on every run.
+- **Limits:**
+  - **A squash merge makes the squash commit the baseline,** so drift made on the branch after the review is absorbed. Run drift on the branch before merging; the PR workflow does.
+  - **Renaming a doc and rewriting most of it in one commit** looks to git like a new file (under 50% similar), so that commit becomes the baseline.
 - **Speed:** most docs take well under a second. Same words, heavily reordered, is the worst case: about 4 s per 5,000 words.
-- **Configuration:** a schema without `:review-drift` exits 2 for this tool only.
-- **On push:** [`examples/github-actions/review-drift.yml`](examples/github-actions/review-drift.yml) runs `bb drift` and commits the result.
+- **On push:** [`examples/github-actions/review-drift.yml`](examples/github-actions/review-drift.yml) runs `bb drift --changed-since` the base branch on every PR push, and commits the result.
 
 ## Command line
 

@@ -1,9 +1,15 @@
 # Lower reviewed docs that changed too much since review, on every push to a PR.
 #
 # Uses the same setup as mark-viewed.yml: variables REVIEWER_LOGIN,
-# REVIEWER_NAME, REVIEWER_EMAIL and secret REVIEWER_TOKEN. The token is needed
-# because the build depends on private repos (e.g. temper). Pushing the result
-# with that token doesn't loop: drift then finds nothing more to lower.
+# REVIEWER_NAME, REVIEWER_EMAIL and secret REVIEWER_TOKEN (needed because the
+# build depends on private repos, e.g. temper). Only docs the PR changed are
+# checked (--changed-since the base branch). Pushing the result doesn't loop:
+# the next run finds nothing more to lower.
+#
+# Trust: the job runs the PR branch's bb.edn with the reviewer's token
+# available. Only use this in repos where every PR author is trusted. It is
+# limited to same-repo PRs pushed by REVIEWER_LOGIN.
+#
 # The repo's bb.edn needs a task that calls temper.okf.drift, e.g.
 #   docs:drift {:requires ([temper.okf.drift]) :task (apply temper.okf.drift/-main *command-line-args*)}
 name: Lower docs that changed since review
@@ -12,27 +18,40 @@ on:
     types: [synchronize, opened, reopened]
 permissions:
   contents: write
+concurrency:
+  group: okf-docs-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 jobs:
   review-drift:
-    if: vars.REVIEWER_LOGIN != ''
+    if: >-
+      vars.REVIEWER_LOGIN != '' &&
+      github.actor == vars.REVIEWER_LOGIN &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.REVIEWER_TOKEN }}
-          fetch-depth: 0   # drift needs history to find the reviewed version
-      - name: Install babashka
-        run: curl -sL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb && sudo bash install-bb
+          fetch-depth: 0   # drift needs full history to find the reviewed version
+      - name: Install babashka (pinned, checksum-verified, outside the checkout)
+        run: |
+          curl -sL https://raw.githubusercontent.com/babashka/babashka/v1.12.215/install -o /tmp/install-bb
+          sudo bash /tmp/install-bb --version 1.12.215 \
+            --checksum b1b975a54bff97d2ec1b0d712b34368d6add00bf5d3ca56fb2fa5f8f88526d45
       - name: Lower drifted docs
         env:
           GH_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
         run: |
-          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-          bb docs:drift
-          if [ -n "$(git status --porcelain)" ]; then
+          git config --global credential.helper '!f() { echo username=x-access-token; echo "password=${GH_TOKEN}"; }; f'
+          bb docs:drift --changed-since "origin/${{ github.base_ref }}"
+          if ! git diff --quiet -- docs; then
             git config user.name "${{ vars.REVIEWER_NAME }}"
             git config user.email "${{ vars.REVIEWER_EMAIL }}"
-            git commit -am "Lower docs changed since review (temper.okf.drift)"
-            git push
+            git add docs
+            git commit -m "Lower docs changed since review (temper.okf.drift)"
+            for attempt in 1 2 3; do
+              git push && break
+              git pull --rebase
+            done
           fi

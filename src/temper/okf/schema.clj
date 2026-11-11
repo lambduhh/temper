@@ -61,3 +61,10 @@
   "The :types taxonomy, sorted and comma-joined for messages."
   [schema]
   (str/join ", " (sort (:types schema))))
+
+(defn rank
+  "Position of a review_maturity value (`L2` or `L2 (Human-reviewed)`) on the
+  schema's ladder, least reviewed first, or nil."
+  [schema value]
+  (when-let [[level] (parse-maturity value)]
+    (first (keep-indexed (fn [i {l :level}] (when (= l level) i)) (maturity-levels schema)))))
