@@ -43,14 +43,16 @@
     (w "docs/d.md" doc)                                                 ; viewed, then changed (DISMISSED)
     (w "src/x.md" doc)                                                  ; viewed, outside docs dir
     (w "docs/e.md" "# no frontmatter\n")                                ; viewed, no frontmatter
+    (w "docs/index.md" "---\nokf_version: \"0.1\"\n---\n\n# Index\n")         ; viewed, reserved: never raised
     (let [files [{:path "docs/a.md" :viewerViewedState "VIEWED"} {:path "docs/b.md" :viewerViewedState "VIEWED"}
                  {:path "docs/c.md" :viewerViewedState "UNVIEWED"} {:path "docs/d.md" :viewerViewedState "DISMISSED"}
                  {:path "src/x.md" :viewerViewedState "VIEWED"} {:path "docs/e.md" :viewerViewedState "VIEWED"}
-                 {:path "docs/z.clj" :viewerViewedState "VIEWED"}]
-          res (r/plan {:schema schema :root dir :docs-dir "docs" :target "L2" :files files})]
+                 {:path "docs/z.clj" :viewerViewedState "VIEWED"} {:path "docs/index.md" :viewerViewedState "VIEWED"}]
+          res (r/plan {:schema (assoc schema :reserved-files #{"index.md" "log.md"}) :root dir :docs-dir "docs" :target "L2" :files files})]
       (is (= ["docs/a.md"] (map :path (:bump res))))
       (is (= #{"docs/b.md"} (set (map :path (:already res)))))
-      (is (= #{"docs/e.md"} (set (map :path (:no-frontmatter res))))))))
+      (is (= #{"docs/e.md"} (set (map :path (:no-frontmatter res)))))
+      (is (= #{"docs/index.md"} (set (map :path (:reserved res)))) "OKF reserved files carry only okf_version"))))
 
 (deftest run-with-injected-github
   (let [dir (str (fs/create-temp-dir))]

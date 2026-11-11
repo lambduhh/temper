@@ -64,11 +64,14 @@
     (str "---\n" fm "\n---\n" body)))
 
 (defn plan
-  "Sort the PR's files into :bump, :already (at or above target) and
-  :no-frontmatter. Only VIEWED .md files under docs-dir are considered."
+  "Sort the PR's files into :bump, :already (at or above target),
+  :no-frontmatter and :reserved. Only VIEWED .md files under docs-dir are
+  considered. Reserved files (the schema's :reserved-files, e.g. index.md) are
+  never raised: OKF lets the bundle root carry only okf_version."
   [{:keys [schema root docs-dir target files]}]
   (let [prefix (str (str/replace docs-dir #"/+$" "") "/")
-        target-rank (rank schema target)]
+        target-rank (rank schema target)
+        reserved    (set (:reserved-files schema))]
     (reduce (fn [acc {:keys [path viewerViewedState]}]
               (let [f (fs/path root path)]
                 (if-not (and (= "VIEWED" viewerViewedState) (str/starts-with? path prefix)
@@ -76,10 +79,11 @@
                   acc
                   (let [content (slurp (str f)) current (current-maturity content)]
                     (cond
+                      (reserved (fs/file-name path))               (update acc :reserved conj {:path path})
                       (nil? (frontmatter-split content))           (update acc :no-frontmatter conj {:path path})
                       (and current (some-> (rank schema current) (>= target-rank))) (update acc :already conj {:path path :current current})
                       :else (update acc :bump conj {:path path :current current}))))))
-            {:bump [] :already [] :no-frontmatter []}
+            {:bump [] :already [] :no-frontmatter [] :reserved []}
             files)))
 
 ;; ---------------------------------------------------------------------------
@@ -160,6 +164,7 @@
   (str (str/join (for [p changed] (str (if dry-run "would raise " "raised ") p "\n")))
        (str/join (for [{:keys [path current]} (:already plan)] (str "already " current ": " path "\n")))
        (str/join (for [{:keys [path]} (:no-frontmatter plan)] (str "skip (no frontmatter): " path "\n")))
+       (str/join (for [{:keys [path]} (:reserved plan)] (str "skip (reserved file): " path "\n")))
        (when viewer (str (count changed) " doc(s) " (if dry-run "would be " "") "raised, from " viewer "'s Viewed checkboxes\n"))
        (when error (str "error: " error "\n"))))
 
