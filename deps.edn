@@ -1,0 +1,8 @@
+{:paths ["src"]
+ ;; No :deps: the library targets babashka, where clj-yaml and cheshire are
+ ;; built in. A JVM Clojure consumer must add them itself -- see :jvm and
+ ;; README.md "Use as a dependency".
+ :aliases
+ {:test {:extra-paths ["test"]}
+  :jvm  {:extra-deps {clj-commons/clj-yaml {:mvn/version "1.0.29"}
+                      cheshire/cheshire    {:mvn/version "5.13.0"}}}}}

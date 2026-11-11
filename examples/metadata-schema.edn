@@ -1,0 +1,113 @@
+;; Example schema for temper's OKF tools: the OKF + RDF document-metadata
+;; convention, with hosts and directories as placeholders. Copy it to <docs-dir>/metadata-schema.edn
+;; (or point OKF_SCHEMA / --schema at it) and edit the marked values.
+;;
+;; Read by temper.okf.validate, temper.okf.links, temper.okf.maturity and temper.okf.new-doc. Every key is
+;; described in README.md ("Schema keys"), including what each tool does when
+;; it is absent.
+;;
+;; Path-valued keys (:bundle-root, :context-file, and :verbatim-dirs,
+;; :untracked-dirs and :glossary under :link-policy) are relative to the
+;; directory the tools run in -- the repo root -- not to the docs directory.
+{;; OKF's one hard requirement.
+ :required        #{:type}
+
+ ;; Controlled vocabulary for `type` (= dcterms:type). Extensible: add values
+ ;; here rather than repurposing existing ones. Unknown types warn, not fail.
+ :types           #{"Reference" "Guide" "RFC" "Decision Log" "Errata"
+                    "Data Model" "Diagram" "Research" "Review" "Vision" "Meeting Notes"}
+
+ ;; Review-trust ladder (an extension over OKF/RDF). Ordered least to most
+ ;; reviewed; each level subsumes the ones below it.
+ ;;
+ ;; SINGLE SOURCE OF TRUTH. This vector drives both:
+ ;;   - the set of legal `review_maturity` values (derived in temper.okf.validate --
+ ;;     do not maintain a separate set), and
+ ;;   - prose tables generated between `<!-- review-maturity:*:begin/end -->`
+ ;;     markers by temper.okf.maturity.
+ :review-maturity [{:level "L0" :label "AI-generated"
+                    :meaning "No human review. Raw AI output."}
+                   {:level "L1" :label "Human-directed"
+                    :meaning "Human specified what to produce. Output not yet verified."}
+                   {:level "L2" :label "Human-reviewed"
+                    :meaning "Human read the output, corrected obvious errors. Claims not individually checked."}
+                   {:level "L3" :label "Human-verified"
+                    :meaning "Human verified specific claims against primary sources (running system, database, upstream docs)."}
+                   {:level "L4" :label "Human-endorsed"
+                    :meaning "Human takes ownership. Content is treated as human-authored with AI assistance."}]
+
+ ;; Keys whose value must be an ISO 8601 date (date or datetime).
+ :date-keys       #{:created :modified :reviewed_at}
+
+ :recommended     #{:title :description :tags :created :modified}
+
+ ;; Every key the convention defines. Unknown keys warn (possible typo), since
+ ;; OKF tolerates producer extensions.
+ :known-keys      #{:type :title :description :tags :created :modified :source
+                    :creator :contributors :ai_assisted :session :tools
+                    :agents_skills :review_maturity :review_note :reviewed_at
+                    :okf_version}
+
+ ;; A review is an event against a version, not a permanent property of a file.
+ ;; Without this, a document can be reviewed, rewritten, and still claim the
+ ;; level it earned before the rewrite.
+ ;;
+ ;; :from       the lowest level that must record `reviewed_at` (that level and
+ ;;             every level above it, per the order of :review-maturity).
+ ;; A missing `reviewed_at` at or above :from is an ERROR -- the claim is
+ ;; unfalsifiable without it. A `modified` later than `reviewed_at` is a WARNING,
+ ;; not an error: editing a reviewed document is normal and should not fail CI,
+ ;; but the staleness must be visible rather than silent.
+ :review-staleness {:from "L2"}
+
+ ;; When `ai_assisted` is present, these keys must be present and non-blank.
+ ;; A reader assessing reliability needs to know which activity produced the
+ ;; draft (`session`) and what it could check its claims against (`tools`).
+ ;; Read by BOTH temper.okf.validate and temper.okf.new-doc, so the scaffolder cannot emit a
+ ;; document the validator would reject. Use #{} to disable the rule.
+ :provenance-required #{:session :tools}
+
+ ;; Escape hatch for documents whose provenance was never captured (drafts
+ ;; predating this rule). Setting a required provenance key to this exact
+ ;; value satisfies the check but emits a warning, so an unknown stays
+ ;; visible on every run instead of being silently absent. It is a
+ ;; declaration of ignorance, not a value — never use it for new work.
+ :provenance-unknown "unrecorded"
+
+ ;; Link policy, enforced by temper.okf.links. Kept here so every rule the docs
+ ;; bundle is held to lives in one file.
+ :link-policy
+ {;; A reader outside your organisation should be able to tell, before
+  ;; clicking, that a link is not meant for them. EDIT: your internal hosts.
+  :internal-marker "(internal)"
+  :internal-hosts  #{"wiki.example.com" "docs.google.com"}
+
+  ;; Directories holding verbatim copies of documents authored elsewhere.
+  ;; Their links are not ours to annotate, so marking is not enforced
+  ;; there -- but the links must still resolve. Matching is by string
+  ;; prefix, not glob.
+  :verbatim-dirs   #{"docs/reference/"}
+
+  ;; Repo-root-relative directories that are gitignored. A doc may still cite
+  ;; one, but such a link cannot resolve for anyone else, so it is reported as
+  ;; a WARNING rather than an error, and reported the same way whether or not
+  ;; the file happens to exist on the machine running the check. Without that,
+  ;; a link into an ignored directory passes locally and fails in CI.
+  :untracked-dirs  #{"notes/"}
+
+  ;; Headings here should be reachable from somewhere in the bundle; an
+  ;; unreferenced entry is reported as a warning, not an error (--glossary).
+  :glossary        "docs/glossary.md"}
+
+ ;; OKF-reserved filenames (skipped from concept validation).
+ :reserved-files  #{"index.md" "log.md"}
+
+ ;; The OKF bundle root: the one index.md permitted frontmatter (okf_version only).
+ :bundle-root     "docs/index.md"
+ :okf-version     "0.1"
+
+ ;; JSON-LD context that maps frontmatter keys to dcterms:/prov: IRIs. Every
+ ;; known key except those listed in :context-exempt must have a mapping there.
+ ;; Set to "" to skip the check; a path that is set but missing exits 2.
+ :context-file    "docs/context.jsonld"
+ :context-exempt  #{:okf_version}}
