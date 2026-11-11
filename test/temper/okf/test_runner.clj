@@ -8,7 +8,8 @@
     temper.okf.load-test
     temper.okf.api-test
     temper.okf.examples-test
-    temper.okf.golden-test])
+    temper.okf.golden-test
+    temper.okf.review-test])
 
 (defn -main [& args]
   (let [nss (if (seq args) (map symbol args) test-namespaces)]
