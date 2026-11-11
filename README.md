@@ -9,6 +9,7 @@ API, and golden tests hold them to the behaviour of the scripts they replace.
 
 - [Namespaces](#namespaces)
 - [Review from a PR](#review-from-a-pr)
+- [Lowering stale reviews](#lowering-stale-reviews)
 - [Command line](#command-line)
 - [Configuration](#configuration)
 - [Exit codes](#exit-codes)
@@ -29,6 +30,7 @@ API, and golden tests hold them to the behaviour of the scripts they replace.
 | [`temper.okf.maturity`](src/temper/okf/maturity.clj) | `tools/gen_maturity_table.bb` | Renders `:review-maturity` into marked regions of prose files, or checks they are current |
 | [`temper.okf.new-doc`](src/temper/okf/new_doc.clj) | `tools/new_doc.bb` | Writes a new document with valid frontmatter |
 | [`temper.okf.review`](src/temper/okf/review.clj) | — | Raises docs you marked **Viewed** in a GitHub PR to L2 (see [Review from a PR](#review-from-a-pr)) |
+| [`temper.okf.drift`](src/temper/okf/drift.clj) | — | Lowers reviewed docs whose words changed past a threshold since review (see [Lowering stale reviews](#lowering-stale-reviews)) |
 | [`temper.okf.config`](src/temper/okf/config.clj) | — | Path resolution, schema reading, configuration errors |
 | [`temper.okf.schema`](src/temper/okf/schema.clj) | — | Views derived from the schema (maturity ladder, hints) |
 | [`temper.okf.cli`](src/temper/okf/cli.clj) | — | Flag parsing and process exit for each `-main` |
@@ -58,6 +60,26 @@ It never lowers a level, and leaves files with no frontmatter alone. A file chan
 **Why it runs with your login:** GitHub shows a file's Viewed state (`viewerViewedState`) only to the person who ticked it, and sends no event when it changes. The tool uses `gh api graphql` with your `gh` login.
 
 **To run it automatically on review:** [`examples/github-actions/mark-viewed.yml`](examples/github-actions/mark-viewed.yml) runs `--commit --push` when you submit a PR review. Its header lists the repo variables and the token secret it needs. It stays skipped until `REVIEWER_LOGIN` is set.
+
+## Lowering stale reviews
+
+A review covers one version of a doc. `bb drift` finds, for each doc at or above `:review-staleness :from` (L2), the most recent commit that changed its `reviewed_at` line, and compares that version's body with the current body **by words**. Frontmatter is ignored on both sides.
+
+```sh
+bb drift --check   # report docs that would be lowered (exit 1 if any)
+bb drift           # lower them
+```
+
+If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
+
+- **The measure:** (words deleted + words inserted) / words at review, capped at 100%.
+- **How it's computed:** the shared prefix and suffix are dropped first. A bag-of-words lower bound settles rewrites in O(n). A Myers diff, stopped at the threshold, handles near misses. Above the threshold it reports "at least" the threshold rather than an exact share.
+- **Skipped:**
+  - docs whose `reviewed_at` was never committed;
+  - docs whose `reviewed_at` changed but isn't committed yet (a re-review in progress).
+- **Speed:** most docs take well under a second. Same words, heavily reordered, is the worst case: about 4 s per 5,000 words.
+- **Configuration:** a schema without `:review-drift` exits 2 for this tool only.
+- **On push:** [`examples/github-actions/review-drift.yml`](examples/github-actions/review-drift.yml) runs `bb drift` and commits the result.
 
 ## Command line
 

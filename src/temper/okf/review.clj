@@ -32,9 +32,9 @@
   (when-let [[level] (schema/parse-maturity value)]
     (first (keep-indexed (fn [i {l :level}] (when (= l level) i)) (schema/maturity-levels schema)))))
 
-(defn- yaml-str [s] (str "\"" (str/replace (str s) "\"" "\\\"") "\""))
+(defn yaml-str [s] (str "\"" (str/replace (str s) "\"" "\\\"") "\""))
 
-(defn- set-key
+(defn set-key
   "Replace `key: ...` in frontmatter text, or append it."
   [fm k v]
   (let [re (re-pattern (str "(?m)^" k ":.*$"))]

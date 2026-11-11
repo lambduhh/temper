@@ -60,6 +60,13 @@
  ;; but the staleness must be visible rather than silent.
  :review-staleness {:from "L2"}
 
+ ;; temper.okf.drift: a reviewed doc (at or above :review-staleness :from) whose
+ ;; body has changed by at least :changed-fraction of its words since the commit
+ ;; that last set reviewed_at is lowered to :to. Measured in words, because a
+ ;; Markdown paragraph is often one long line. Re-review (e.g. Viewed ->
+ ;; temper.okf.review) raises it again.
+ :review-drift {:changed-fraction 0.2 :to "L1"}
+
  ;; When `ai_assisted` is present, these keys must be present and non-blank.
  ;; A reader assessing reliability needs to know which activity produced the
  ;; draft (`session`) and what it could check its claims against (`tools`).

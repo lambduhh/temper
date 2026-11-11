@@ -1,0 +1,38 @@
+# Lower reviewed docs that changed too much since review, on every push to a PR.
+#
+# Uses the same setup as mark-viewed.yml: variables REVIEWER_LOGIN,
+# REVIEWER_NAME, REVIEWER_EMAIL and secret REVIEWER_TOKEN. The token is needed
+# because the build depends on private repos (e.g. temper). Pushing the result
+# with that token doesn't loop: drift then finds nothing more to lower.
+# The repo's bb.edn needs a task that calls temper.okf.drift, e.g.
+#   docs:drift {:requires ([temper.okf.drift]) :task (apply temper.okf.drift/-main *command-line-args*)}
+name: Lower docs that changed since review
+on:
+  pull_request:
+    types: [synchronize, opened, reopened]
+permissions:
+  contents: write
+jobs:
+  review-drift:
+    if: vars.REVIEWER_LOGIN != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.REVIEWER_TOKEN }}
+          fetch-depth: 0   # drift needs history to find the reviewed version
+      - name: Install babashka
+        run: curl -sL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb && sudo bash install-bb
+      - name: Lower drifted docs
+        env:
+          GH_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          bb docs:drift
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "${{ vars.REVIEWER_NAME }}"
+            git config user.email "${{ vars.REVIEWER_EMAIL }}"
+            git commit -am "Lower docs changed since review (temper.okf.drift)"
+            git push
+          fi

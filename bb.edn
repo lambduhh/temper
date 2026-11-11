@@ -16,6 +16,9 @@
   review   {:doc "Raise docs you marked Viewed in a PR to L2 (temper.okf.review). Args: <pr> [--dry-run] [--commit [--push]] [--target L2]"
             :requires ([temper.okf.review])
             :task (apply temper.okf.review/-main *command-line-args*)}
+  drift    {:doc "Lower reviewed docs whose words changed past :review-drift since review (temper.okf.drift). Flags: --check --docs-dir --schema"
+            :requires ([temper.okf.drift])
+            :task (apply temper.okf.drift/-main *command-line-args*)}
   new-doc  {:doc "Scaffold a document with valid frontmatter (temper.okf.new-doc). Flags: see README"
             :requires ([temper.okf.new-doc])
             :task (apply temper.okf.new-doc/-main *command-line-args*)}}}
