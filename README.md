@@ -8,6 +8,7 @@ The first tools, `temper.okf.*`, check and maintain Markdown documents carrying
 API, and golden tests hold them to the behaviour of the scripts they replace.
 
 - [Namespaces](#namespaces)
+- [Review from a PR](#review-from-a-pr)
 - [Command line](#command-line)
 - [Configuration](#configuration)
 - [Exit codes](#exit-codes)
@@ -27,12 +28,36 @@ API, and golden tests hold them to the behaviour of the scripts they replace.
 | [`temper.okf.links`](src/temper/okf/links.clj) | `tools/check_links.bb` | Checks relative links, anchors and access markers on internal URLs; optional glossary sweep |
 | [`temper.okf.maturity`](src/temper/okf/maturity.clj) | `tools/gen_maturity_table.bb` | Renders `:review-maturity` into marked regions of prose files, or checks they are current |
 | [`temper.okf.new-doc`](src/temper/okf/new_doc.clj) | `tools/new_doc.bb` | Writes a new document with valid frontmatter |
+| [`temper.okf.review`](src/temper/okf/review.clj) | — | Raises docs you marked **Viewed** in a GitHub PR to L2 (see [Review from a PR](#review-from-a-pr)) |
 | [`temper.okf.config`](src/temper/okf/config.clj) | — | Path resolution, schema reading, configuration errors |
 | [`temper.okf.schema`](src/temper/okf/schema.clj) | — | Views derived from the schema (maturity ladder, hints) |
 | [`temper.okf.cli`](src/temper/okf/cli.clj) | — | Flag parsing and process exit for each `-main` |
 
 No namespace reads the environment, touches the filesystem, prints or exits
 when it is loaded. All of that happens inside `run` and `-main`.
+
+## Review from a PR
+
+Tick **Viewed** on a doc in a pull request, then run:
+
+```sh
+bb review 4 --dry-run          # show what would change
+bb review 4 --commit --push    # raise them, commit to the PR branch, push
+```
+
+For each Markdown file under the docs dir that **you** marked Viewed and whose `review_maturity` is below the target (`--target`, default `L2`), it sets three frontmatter lines:
+
+| Key | Value |
+|---|---|
+| `review_maturity` | the target, with its label, e.g. `L2 (Human-reviewed)` |
+| `reviewed_at` | today |
+| `review_note` | `"Viewed by <login> in PR #<n> on <date>."` |
+
+It never lowers a level, and leaves files with no frontmatter alone. A file changed after you viewed it shows as *dismissed* rather than viewed, so only the version you saw is raised. `--commit` refuses to run unless the current branch is the PR's head branch.
+
+**Why it runs with your login:** GitHub shows a file's Viewed state (`viewerViewedState`) only to the person who ticked it, and sends no event when it changes. The tool uses `gh api graphql` with your `gh` login.
+
+**To run it automatically on review:** [`examples/github-actions/mark-viewed.yml`](examples/github-actions/mark-viewed.yml) runs `--commit --push` when you submit a PR review. Its header lists the repo variables and the token secret it needs. It stays skipped until `REVIEWER_LOGIN` is set.
 
 ## Command line
 
