@@ -1,0 +1,21 @@
+{:paths ["src"]
+ :tasks
+ {test     {:doc "Run unit, API and golden tests. Args: test namespaces to run instead of all."
+            :extra-paths ["test"]
+            :requires ([temper.okf.test-runner])
+            :task (apply temper.okf.test-runner/-main *command-line-args*)}
+  validate {:doc "Validate document frontmatter (temper.okf.validate). Flags: --docs-dir --schema"
+            :requires ([temper.okf.validate])
+            :task (apply temper.okf.validate/-main *command-line-args*)}
+  links    {:doc "Check links, anchors and access markers (temper.okf.links). Flags: --quiet --glossary --docs-dir --schema"
+            :requires ([temper.okf.links])
+            :task (apply temper.okf.links/-main *command-line-args*)}
+  maturity {:doc "Regenerate review-maturity tables (temper.okf.maturity). Flags: --check --targets --docs-dir --schema"
+            :requires ([temper.okf.maturity])
+            :task (apply temper.okf.maturity/-main *command-line-args*)}
+  review   {:doc "Raise docs you marked Viewed in a PR to L2 (temper.okf.review). Args: <pr> [--dry-run] [--commit [--push]] [--target L2]"
+            :requires ([temper.okf.review])
+            :task (apply temper.okf.review/-main *command-line-args*)}
+  new-doc  {:doc "Scaffold a document with valid frontmatter (temper.okf.new-doc). Flags: see README"
+            :requires ([temper.okf.new-doc])
+            :task (apply temper.okf.new-doc/-main *command-line-args*)}}}

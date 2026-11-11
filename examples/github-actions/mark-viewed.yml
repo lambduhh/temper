@@ -1,0 +1,37 @@
+# Raise docs the reviewer marked "Viewed" in a PR to L2, when they submit a review.
+#
+# GitHub shows a file's Viewed state only to the person who ticked it, so this
+# runs with that person's token. Set up, in the repo's Settings:
+#   - variable REVIEWER_LOGIN: the reviewer's GitHub login (the job is skipped
+#     until this is set, and for anyone else's reviews)
+#   - variables REVIEWER_NAME, REVIEWER_EMAIL: the git identity for the commit
+#   - secret REVIEWER_TOKEN: a fine-grained token of the reviewer's with
+#     Contents read/write and Pull requests read on this repo, plus Contents read
+#     on any private repo the build depends on (e.g. temper itself)
+# The repo's bb.edn needs a task that calls temper.okf.review, e.g.
+#   docs:mark-viewed {:requires ([temper.okf.review]) :task (apply temper.okf.review/-main *command-line-args*)}
+name: Mark viewed docs as reviewed
+on:
+  pull_request_review:
+    types: [submitted]
+permissions:
+  contents: write
+jobs:
+  mark-viewed:
+    if: vars.REVIEWER_LOGIN != '' && github.event.review.user.login == vars.REVIEWER_LOGIN
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.REVIEWER_TOKEN }}
+      - name: Install babashka
+        run: curl -sL https://raw.githubusercontent.com/babashka/babashka/master/install -o install-bb && sudo bash install-bb
+      - name: Raise viewed docs to L2
+        env:
+          GH_TOKEN: ${{ secrets.REVIEWER_TOKEN }}
+        run: |
+          git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git config user.name "${{ vars.REVIEWER_NAME }}"
+          git config user.email "${{ vars.REVIEWER_EMAIL }}"
+          bb docs:mark-viewed ${{ github.event.pull_request.number }} --commit --push

@@ -1,0 +1,35 @@
+;; Fixture schema for the golden tests, with path-valued keys pointed at this
+;; fixture and test-only hosts.
+{:required        #{:type}
+ :types           #{"Reference" "Guide" "RFC" "Decision Log" "Errata"
+                    "Data Model" "Diagram" "Research" "Review" "Vision" "Meeting Notes"}
+ :review-maturity [{:level "L0" :label "AI-generated"
+                    :meaning "No human review. Raw AI output."}
+                   {:level "L1" :label "Human-directed"
+                    :meaning "Human specified what to produce. Output not yet verified."}
+                   {:level "L2" :label "Human-reviewed"
+                    :meaning "Human read the output, corrected obvious errors. Claims not individually checked."}
+                   {:level "L3" :label "Human-verified"
+                    :meaning "Human verified specific claims against primary sources (running system, database, upstream docs)."}
+                   {:level "L4" :label "Human-endorsed"
+                    :meaning "Human takes ownership. Content is treated as human-authored with AI assistance."}]
+ :date-keys       #{:created :modified :reviewed_at}
+ :recommended     #{:title :description :tags :created :modified}
+ :known-keys      #{:type :title :description :tags :created :modified :source
+                    :creator :contributors :ai_assisted :session :tools
+                    :agents_skills :review_maturity :review_note :reviewed_at
+                    :okf_version}
+ :review-staleness {:from "L2"}
+ :provenance-required #{:session :tools}
+ :provenance-unknown "unrecorded"
+ :link-policy
+ {:internal-marker "(internal)"
+  :internal-hosts  #{"intranet.example.com" "docs.google.com"}
+  :verbatim-dirs   #{"docs/reference/"}
+  :untracked-dirs  #{"notes/"}
+  :glossary        "docs/glossary.md"}
+ :reserved-files  #{"index.md" "log.md"}
+ :bundle-root     "docs/index.md"
+ :okf-version     "0.1"
+ :context-file    "docs/context.jsonld"
+ :context-exempt  #{:okf_version}}
