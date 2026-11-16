@@ -1,5 +1,36 @@
 # temper
 
+This project used to call its method the *reliability ratchet*: move a working
+convention from LLM → REPL → library → enforcement, each step more deterministic
+than the last. It is now called **temper**, because the word fits three ways.
+
+1. **To temper is to moderate.** These tools moderate how much of the work we
+   hand to an AI, and how much we take on trust.
+2. **A temper is a flash of anger**, here at the state of things that makes
+   this work necessary.
+3. **Most importantly, temper is a property of metal.**
+   [Wiktionary](https://en.wiktionary.org/wiki/temper) defines it as:
+
+   > The heat treatment to which a metal or other material has been subjected;
+   > a material that has undergone a particular heat treatment. The state of a
+   > metal or other substance, especially as to its hardness, produced by some
+   > process of heating or cooling. *The temper of iron or steel.*
+
+   A convention gets the same treatment here: it is worked through again and
+   again until it sets into a check that holds its shape.
+
+Shakespeare tests that meaning between two blades:
+
+> Between two blades, which bears the better temper: […]
+> I have perhaps some shallow spirit of judgement;
+> But in these nice sharp quillets of the law,
+> Good faith, I am no wiser than a daw.
+
+—William Shakespeare, *The First Part of Henry the Sixt*, Act II, scene iv.
+Written 1591; published in the First Folio (*Mr. William Shakespeares
+Comedies, Histories, & Tragedies*, London: Isaac Iaggard and Edward Blount,
+1623).
+
 Tools that turn working conventions into checks, and AI skills that help people learn and stay engaged rather than offload their thinking.
 
 The first tools, `temper.okf.*`, check and maintain Markdown documents carrying
