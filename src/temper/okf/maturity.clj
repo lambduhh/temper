@@ -29,11 +29,13 @@
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
             [temper.okf.cli :as cli]
-            [temper.okf.config :as config]))
+            [temper.okf.config :as config]
+            [temper.okf.schema :as schema]))
 
 (def ^:private tool
-  "Prefix for configuration errors on stderr; the original script's name."
-  "gen_maturity_table")
+  "Prefix for configuration errors on stderr: this namespace. The original
+  script's name, `gen_maturity_table`, named a file only its own repo had."
+  "temper.okf.maturity")
 
 (defn- split-targets [v]
   (if (sequential? v)
@@ -73,6 +75,7 @@
     {:docs-dir    docs-dir
      :schema-file schema-file
      :levels      (:review-maturity schema)
+     :command     (schema/command schema :maturity)
      :targets     (resolve-targets opts docs-dir)}))
 
 (defn render-table
@@ -128,13 +131,14 @@
      :levels       number of levels in the ladder
      :with-markers number of files carrying at least one marker
      :stale        number of stale files (rewritten, unless :check)
-     :check ..}
+     :check ..
+     :command      how the FAILED line names this tool (temper.okf.schema/command)}
   or, on unreadable configuration, {:exit 2 :config-errors [line ...]}."
   ([] (run {}))
   ([opts]
    (config/catch-config-errors
     (fn []
-      (let [{:keys [levels targets]} (load-config opts)
+      (let [{:keys [levels targets command]} (load-config opts)
             check? (boolean (:check opts))
             files  (vec (for [path targets
                               :let [f (io/file path)]
@@ -153,12 +157,13 @@
          :levels       (count levels)
          :with-markers (count (filter #(seq (:kinds %)) files))
          :stale        stale
-         :check        check?})))))
+         :check        check?
+         :command      command})))))
 
 (defn report
   "The text the original script printed to stdout for `result`. Empty for a
   configuration error, whose lines go to stderr instead."
-  [{:keys [exit files levels with-markers stale check]}]
+  [{:keys [exit files levels with-markers stale check command]}]
   (if (= 2 exit)
     ""
     (with-out-str
@@ -172,7 +177,7 @@
       (printf "%d level(s) · %d file(s) with markers · %d %s\n"
               levels with-markers stale (if check "stale" "rewritten"))
       (if (and check (pos? stale))
-        (println "FAILED — run `bb tools/gen_maturity_table.bb` and commit the result")
+        (println (str "FAILED — run `" command "` and commit the result"))
         (println "OK")))))
 
 (defn -main

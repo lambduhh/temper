@@ -64,7 +64,7 @@
 
 (defn require-docs-dir!
   "The docs directory must exist and be readable; otherwise exit 2 with a
-  message prefixed by `tool` (the original script's name)."
+  message prefixed by `tool` (the calling tool's namespace)."
   [tool docs-dir]
   (let [dir (io/file docs-dir)]
     (when-not (and (.isDirectory dir) (.canRead dir))

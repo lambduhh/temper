@@ -68,3 +68,27 @@
   [schema value]
   (when-let [[level] (parse-maturity value)]
     (first (keep-indexed (fn [i {l :level}] (when (= l level) i)) (maturity-levels schema)))))
+
+;; Messages name things that exist for whoever runs the tool. The originals
+;; printed their own script paths (`bb tools/new_doc.bb`), which exist only in
+;; the repo they came from. temper cannot know whether a consumer wrapped a
+;; tool in a bb task, so the consumer may say; otherwise print the form that
+;; works whenever temper is on the classpath.
+
+(defn- non-blank [v]
+  (some-> v str str/trim not-empty))
+
+(defn command
+  "How to run `tool` (:new-doc, :maturity) in this project, for messages:
+  (get-in schema [:commands tool]) when set and non-blank, else
+  `bb -m temper.okf.<tool>`."
+  [schema tool]
+  (or (non-blank (get-in schema [:commands tool]))
+      (str "bb -m temper.okf." (name tool))))
+
+(defn spec-doc
+  "Where the consumer documents the convention, for validate's \"see ...\"
+  pointers: (:spec-doc schema) when set and non-blank, else nil. Callers fall
+  back to the schema file, which always exists once the run has got this far."
+  [schema]
+  (non-blank (:spec-doc schema)))

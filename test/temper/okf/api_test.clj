@@ -98,7 +98,7 @@
       (is (= {} (validate/context-date-types {"a" {"@type" "xsd:date"}}))
           "without an xsd prefix, xsd:date is an absolute IRI, not the XSD type")))
   (testing "unreadable configuration is data, not an exit"
-    (is (= {:exit 2 :config-errors ["validate_metadata: docs directory /nonexistent is missing or unreadable."]}
+    (is (= {:exit 2 :config-errors ["temper.okf.validate: docs directory /nonexistent is missing or unreadable."]}
            (quietly #(validate/run {:docs-dir "/nonexistent"}))))
     (let [{:keys [docs-dir schema]} (bundle! "clean" :edit #(dissoc % :provenance-unknown))]
       (is (= 2 (:exit (quietly #(validate/run {:docs-dir docs-dir :schema schema})))))
@@ -172,7 +172,8 @@
 (deftest new-doc-usage-errors
   (let [{:keys [docs-dir schema]} (bundle! "clean")
         base {:docs-dir docs-dir :schema schema :type "Guide" :title "T"}]
-    (is (= {:exit 1 :error "--path is required" :warnings [] :docs-dir docs-dir}
+    (is (= {:exit 1 :error "--path is required" :warnings [] :docs-dir docs-dir
+            :command "bb tools/new_doc.bb"}
            (quietly #(new-doc/run base))))
     (testing "an empty collection is as blank as an empty string"
       (is (str/includes? (:error (quietly #(new-doc/run (assoc base :path (str docs-dir "/x.md")
@@ -184,4 +185,11 @@
     (testing ":force true overwrites from the API"
       (is (= 1 (:exit (quietly #(new-doc/run (assoc base :path (str docs-dir "/a.md")))))))
       (is (= 0 (:exit (quietly #(new-doc/run (assoc base :path (str docs-dir "/a.md") :force true)))))))
-    (is (= {:exit 2} (select-keys (quietly #(new-doc/run (assoc base :schema "/nonexistent.edn"))) [:exit])))))
+    (is (= {:exit 2} (select-keys (quietly #(new-doc/run (assoc base :schema "/nonexistent.edn"))) [:exit])))
+    (testing "the internal-error guard names temper, not the consumer's command"
+      ;; Unreachable without a bug in `frontmatter`, so no golden case can
+      ;; exercise it; stub one in.
+      (with-redefs [new-doc/frontmatter (constantly "---\nno closing delimiter\n")]
+        (let [r (quietly #(new-doc/run (assoc base :path (str docs-dir "/bug.md"))))]
+          (is (= 1 (:exit r)))
+          (is (str/ends-with? (:error r) "This is a bug in temper.okf.new-doc, not in your arguments.")))))))

@@ -20,6 +20,12 @@
 (defn- dissoc-policy [& ks] #(apply update % :link-policy dissoc ks))
 (defn- assoc-policy [k v] #(assoc-in % [:link-policy k] v))
 
+(def ^:private original-commands
+  "What the fixture schemas set :commands to: the original scripts' own
+  commands, so cases that print the usage or FAILED line compare
+  byte-for-byte. The difference/*-command cases pin what happens without it."
+  {:new-doc "bb tools/new_doc.bb" :maturity "bb tools/gen_maturity_table.bb"})
+
 (def ^:private full-env-relocated
   {"OKF_DOCS_DIR" "knowledge" "OKF_SCHEMA" "cfg/okf.edn"})
 
@@ -305,7 +311,9 @@
    {:id "new-doc/real-copy" :bundle :real-copy
     :args (into ["--type" "Research" "--title" "Golden" "--path" "docs/roadshow/golden.md"] ai-flags)
     :exit 0}
+   ;; Exit 1 prints the usage line; the real bundle's schema has no :commands.
    {:id "new-doc/real-copy-exists" :bundle :real-copy
+    :schema-edit #(assoc % :commands original-commands)
     :args ["--type" "Reference" "--title" "G" "--path" "docs/glossary.md"] :exit 1}])
 
 ;; ---------------------------------------------------------------------------
@@ -358,7 +366,77 @@
     :capture ["docs/a.md"]
     :expect-original {:exit 1 :out-includes "error: --type is required"}
     :expect-library  {:exit 0 :out "wrote docs/a.md\n"
-                      :file-includes {"docs/a.md" "type: Guide\n"}}}])
+                      :file-includes {"docs/a.md" "type: Guide\n"}}}
+   ;; The originals named their own scripts (`bb tools/new_doc.bb`), which exist
+   ;; only in the repo they came from. Without :commands the library names the
+   ;; form that works wherever temper is on the classpath; with it, the
+   ;; consumer's own command. See temper.okf.schema/command.
+   {:id "difference/new-doc-default-command" :tool :new-doc :bundle "clean" :args []
+    :schema-edit #(dissoc % :commands)
+    :expect-original {:exit 1 :out-includes "usage: bb tools/new_doc.bb --type <Type>"}
+    :expect-library  {:exit 1 :out-includes "usage: bb -m temper.okf.new-doc --type <Type>"}}
+   {:id "difference/new-doc-custom-command" :tool :new-doc :bundle "clean" :args []
+    :schema-edit #(assoc-in % [:commands :new-doc] "bb new-doc")
+    :expect-original {:exit 1 :out-includes "usage: bb tools/new_doc.bb --type <Type>"}
+    :expect-library  {:exit 1 :out-includes "usage: bb new-doc --type <Type>"}}
+   {:id "difference/maturity-default-command" :tool :maturity :bundle "full" :args ["--check"]
+    :schema-edit #(dissoc % :commands)
+    :expect-original {:exit 1 :out-includes "FAILED — run `bb tools/gen_maturity_table.bb` and commit"}
+    :expect-library  {:exit 1 :out-includes "FAILED — run `bb -m temper.okf.maturity` and commit"}}
+   {:id "difference/maturity-custom-command" :tool :maturity :bundle "full" :args ["--check"]
+    :schema-edit #(assoc-in % [:commands :maturity] "bb maturity")
+    :expect-original {:exit 1 :out-includes "FAILED — run `bb tools/gen_maturity_table.bb` and commit"}
+    :expect-library  {:exit 1 :out-includes "FAILED — run `bb maturity` and commit"}}
+   ;; The originals said "see CLAUDE.md", a file in their own repo. The library
+   ;; points at the schema's :spec-doc, or else at the schema file, which
+   ;; exists once the run gets this far. One case per message, all from the
+   ;; full fixture. See temper.okf.schema/spec-doc.
+   {:id "difference/validate-no-frontmatter-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "with at least `type:` (see CLAUDE.md)"}
+    :expect-library  {:exit 1 :out-includes "with at least `type:` (see docs/metadata-schema.edn)"}}
+   {:id "difference/validate-maturity-ladder-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see CLAUDE.md)"}
+    :expect-library  {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see docs/metadata-schema.edn)"}}
+   {:id "difference/validate-reviewed-at-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "(e.g. `reviewed_at: 2026-09-09`). See CLAUDE.md."}
+    :expect-library  {:exit 1 :out-includes "(e.g. `reviewed_at: 2026-09-09`). See docs/metadata-schema.edn."}}
+   {:id "difference/validate-provenance-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "set it to \"unrecorded\". See CLAUDE.md."}
+    :expect-library  {:exit 1 :out-includes "set it to \"unrecorded\". See docs/metadata-schema.edn."}}
+   {:id "difference/validate-unknown-key-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "unknown key `autor` — check the spelling against the field list in CLAUDE.md, or add it to :known-keys in docs/metadata-schema.edn"}
+    :expect-library  {:exit 1 :out-includes "unknown key `autor` — check the spelling, or add it to :known-keys in docs/metadata-schema.edn"}}
+   ;; With :spec-doc set, the pointer names it; the unknown-key warning keeps
+   ;; the original's wording with the consumer's file in it.
+   {:id "difference/validate-custom-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(assoc % :spec-doc "CONTRIBUTING.md")
+    :expect-original {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see CLAUDE.md)"}
+    :expect-library  {:exit 1 :out-includes "the field list in CONTRIBUTING.md, or add it to :known-keys"}}
+   ;; Configuration errors were prefixed with the original script's name,
+   ;; naming a file only the original repo had. The library uses its
+   ;; namespace. Every exit-2 case above compares stderr after
+   ;; g/renamed-prefix; these pin the raw prefix on each side, one per tool.
+   {:id "difference/validate-stderr-prefix" :tool :validate :bundle "clean" :args []
+    :env {"OKF_DOCS_DIR" "nope"}
+    :expect-original {:exit 2 :out "" :err-starts-with "validate_metadata: docs directory nope"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.validate: docs directory nope"}}
+   {:id "difference/links-stderr-prefix" :tool :links :bundle "clean" :args []
+    :schema-edit #(dissoc % :link-policy)
+    :expect-original {:exit 2 :out "" :err-starts-with "check_links: cannot run -- :link-policy"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.links: cannot run -- :link-policy"}}
+   {:id "difference/maturity-stderr-prefix" :tool :maturity :bundle "clean" :args []
+    :env {"OKF_MATURITY_TARGETS" "NOPE.md"}
+    :expect-original {:exit 2 :out "" :err-starts-with "gen_maturity_table: target file(s) missing"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.maturity: target file(s) missing"}}
+   {:id "difference/new-doc-stderr-prefix" :tool :new-doc :bundle "clean" :args []
+    :env {"OKF_SCHEMA" "nope.edn"}
+    :expect-original {:exit 2 :out "" :err-starts-with "new_doc: cannot read schema at nope.edn"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.new-doc: cannot read schema at nope.edn"}}])
 
 ;; ---------------------------------------------------------------------------
 
@@ -391,7 +469,8 @@
       (when expect
         (is (str/includes? (output original) expect) "original output contains the expected text"))
       (is (= (:out original) (:out library)) "stdout")
-      (is (= (:err original) (:err library)) "stderr")
+      (is (= (g/renamed-prefix (:tool case) (:err original)) (:err library))
+          "stderr, after the one rename in g/renamed-prefix")
       (is (= (:exit original) (:exit library)) "exit code")
       (is (= (:tree original) (:tree library)) "resulting files"))))
 
@@ -406,6 +485,8 @@
           (is (= s (:out result)) (str side " stdout")))
         (when-let [s (:out-includes expected)]
           (is (str/includes? (:out result) s) (str side " stdout contains")))
+        (when-let [s (:err-starts-with expected)]
+          (is (str/starts-with? (:err result) s) (str side " stderr starts with")))
         (doseq [[path s] (:file-includes expected)]
           (is (str/includes? (str (get-in result [:files path])) s)
               (str side " " path " contains " (pr-str s))))))))

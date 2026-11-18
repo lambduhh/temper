@@ -34,10 +34,23 @@
   (fs/exists? (fs/path real-bundle "tools" "validate_metadata.clj")))
 
 (def tools
-  {:validate {:script "validate_metadata.clj" :ns "temper.okf.validate"}
-   :links    {:script "check_links.bb"        :ns "temper.okf.links"}
-   :maturity {:script "gen_maturity_table.bb" :ns "temper.okf.maturity"}
-   :new-doc  {:script "new_doc.bb"            :ns "temper.okf.new-doc"}})
+  "Each tool's original script, library namespace, and the prefix the original
+  put on its configuration errors (the library uses the namespace instead)."
+  {:validate {:script "validate_metadata.clj" :ns "temper.okf.validate" :prefix "validate_metadata"}
+   :links    {:script "check_links.bb"        :ns "temper.okf.links"    :prefix "check_links"}
+   :maturity {:script "gen_maturity_table.bb" :ns "temper.okf.maturity" :prefix "gen_maturity_table"}
+   :new-doc  {:script "new_doc.bb"            :ns "temper.okf.new-doc"  :prefix "new_doc"}})
+
+(defn renamed-prefix
+  "The original's stderr `err` as the library would print it: `<prefix>: ` at
+  the start of a line becomes `<ns>: `, for this `tool` only. Nothing else is
+  rewritten, so every other byte still has to match. README difference 10;
+  the difference/*-stderr-prefix cases pin both raw forms."
+  [tool err]
+  (let [{:keys [prefix ns]} (tools tool)]
+    (str/replace (str err)
+                 (re-pattern (str "(?m)^" (java.util.regex.Pattern/quote (str prefix ": "))))
+                 (str ns ": "))))
 
 (def ^:private scrubbed-env
   "The parent environment minus anything that would change what a child run
