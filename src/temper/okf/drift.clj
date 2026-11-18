@@ -116,8 +116,14 @@
           {:fraction (min 1.0 (double (/ d (count a)))) :at-least? false}
           {:fraction threshold :at-least? true})))))
 
-(defn- lowered? [{:keys [fraction at-least?]} threshold]
-  (or at-least? (>= fraction threshold)))
+(defn- lowered?
+  "On a branch, any change after the review lowers the doc; otherwise only a
+  change of at least `threshold` does."
+  [{:keys [fraction at-least?]} threshold on-branch?]
+  (cond
+    at-least?  true
+    on-branch? (pos? fraction)
+    :else      (>= fraction threshold)))
 
 ;; ---------------------------------------------------------------------------
 ;; run / -main
@@ -208,9 +214,7 @@
                             :ok (let [res (drift (fm/body b) (fm/body content) threshold)
                                       on-branch? (boolean (and base (not (on-base? root sha base))))
                                       entry (assoc res :path path :sha (subs sha 0 7) :on-branch? on-branch?)]
-                                  (if (if on-branch?
-                                        (or (:at-least? res) (pos? (:fraction res)))
-                                        (lowered? res threshold))
+                                  (if (lowered? res threshold on-branch?)
                                     (update acc :lowered conj entry)
                                     (update acc :checked conj entry))))))))
                   {:lowered [] :checked [] :no-baseline [] :pending []}
