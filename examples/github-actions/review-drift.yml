@@ -3,7 +3,10 @@
 # Uses the same setup as mark-viewed.yml: variables REVIEWER_LOGIN,
 # REVIEWER_NAME, REVIEWER_EMAIL and secret REVIEWER_TOKEN (needed because the
 # build depends on private repos, e.g. temper). Only docs the PR changed are
-# checked (--changed-since the base branch). Pushing the result doesn't loop:
+# checked (--changed-since the base branch). --changed-since also sets the base
+# for the branch rule: a doc reviewed on this PR is lowered by any edit after
+# its review, so a squash merge cannot absorb unreviewed text. Pushing the
+# result doesn't loop:
 # the next run finds nothing more to lower.
 #
 # Trust: the job runs the PR branch's bb.edn with the reviewer's token
