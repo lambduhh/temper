@@ -118,15 +118,13 @@ property of a file, is what [`bb drift`](#lowering-stale-reviews) and
 
 The fit isn't exact everywhere:
 
-- **OKF moved on.** temper targets OKF v0.1 (`:okf-version "0.1"`).
-  [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01),
-  published in July 2026, adds its own provenance and trust families:
-  `generated`, `verified`, `sources`, `status` and `stale_after`. temper
-  bundles still meet v0.2's conformance conditions
-  ([§11](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#11-conformance)),
-  and v0.2 consumers must not reject a concept for a missing optional
-  family. temper doesn't write `verified`, though, so a v0.2 consumer that derives trust tiers from
-  `verified` treats every temper document as unverified, even one at L4.
+- **OKF v0.2 is checked, not yet written.** The example schema targets
+  [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01)
+  (`:okf-version "0.2"`), and `temper.okf.validate` checks the shape of its
+  families (`generated`, `verified`, `sources`, `usage_window`, `status`,
+  `stale_after`) whenever they are present (difference 8). No tool writes them
+  yet, so a v0.2 consumer that derives trust tiers from `verified` still
+  treats a temper document as unverified, even one at L4.
 - **`reviewed_at` is typed `xsd:date`** in
   [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
   writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
@@ -540,6 +538,14 @@ behaviour are encoded as expected-difference cases in
    prefix coerces to nothing and is not checked. The example context now
    types `reviewed_at` as `xsd:dateTime`, which is what `temper.okf.review`
    writes. Warnings only; the exit code is unchanged.
+8. **OKF v0.2 families are checked.** When a document carries `generated`,
+   `verified`, `sources`, `usage_window`, `status` or `stale_after`, a
+   malformed value is an error: a missing or non-actor `by`, a timestamp
+   without a time or UTC offset, a `sources` entry with no `resource`, a
+   `status` other than draft, stable or deprecated. A missing family is never
+   an error, since OKF forbids rejecting a document for one. Timestamps are
+   checked against the written text, because the YAML parser turns dates and
+   offset-less datetimes into the same `java.util.Date`.
 
 ## Carried-over behaviour
 

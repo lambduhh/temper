@@ -60,3 +60,56 @@ temper:reviewMaturity
     rdfs:label "review maturity" ;
     rdfs:comment "How far a human has gone in reviewing the document, written as a level code and its label, e.g. \"L2 (Human-reviewed)\". The levels are defined by the :review-maturity ladder in each bundle's metadata schema, not here, so a bundle can define its own. It describes review trust, not a publication lifecycle stage. Frontmatter key: review_maturity." ;
     rdfs:seeAlso <http://schema.org/creativeWorkStatus>, dcterms:dateAccepted .
+
+# --- OKF v0.2 families (generated, verified, sources, usage_window, stale_after)
+
+temper:actor
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "actor" ;
+    rdfs:comment "An OKF v0.2 actor string (§7): <producer>/<version> for agents and tools, human:<id> for a person, process:<id> for an automated process. Frontmatter key: generated.by, verified.by." ;
+    rdfs:seeAlso prov:wasAssociatedWith, prov:Agent .
+
+temper:verification
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "verification" ;
+    rdfs:comment "A verification event: who or what confirmed the document against its sources, and when (OKF v0.2 §5.2). Frontmatter key: verified." ;
+    rdfs:seeAlso dcterms:dateAccepted .
+
+temper:sourceKey
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "source key" ;
+    rdfs:comment "The stable id of a sources entry, used as a footnote label to attribute claims (OKF v0.2 §5.1). Frontmatter key: sources[].id." .
+
+temper:usageCount
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "usage count" ;
+    rdfs:comment "How often a source was exercised over the usage window; a liveness signal, not a score (OKF v0.2 §5.1). Frontmatter key: sources[].usage_count." .
+
+temper:usageWindow
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "usage window" ;
+    rdfs:comment "The time range every usage_count is measured over (OKF v0.2 §5.1). Frontmatter key: usage_window." .
+
+temper:windowStart
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "window start" ;
+    rdfs:comment "Start of a usage window. Frontmatter key: usage_window.from." .
+
+temper:windowEnd
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "window end" ;
+    rdfs:comment "End of a usage window. Frontmatter key: usage_window.to." .
+
+temper:staleAfter
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "stale after" ;
+    rdfs:comment "The instant on or after which the document's content is stale (OKF v0.2 §5.5). Frontmatter key: stale_after." ;
+    rdfs:seeAlso dcterms:valid .

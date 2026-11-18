@@ -9,6 +9,7 @@
     temper.okf.api-test
     temper.okf.examples-test
     temper.okf.vocab-test
+    temper.okf.okf-v02-test
     temper.okf.golden-test
     temper.okf.review-test
     temper.okf.drift-test])

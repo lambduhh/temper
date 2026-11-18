@@ -20,7 +20,7 @@
       (fs/create-dirs (fs/path dir "docs"))
       (fs/copy (fs/path g/root "examples" "metadata-schema.edn") (fs/path dir "docs" "metadata-schema.edn"))
       (fs/copy (fs/path g/root "examples" "context.jsonld") (fs/path dir "docs" "context.jsonld"))
-      (spit (str (fs/path dir "docs" "index.md")) "---\nokf_version: \"0.1\"\n---\n\n# Index\n")
+      (spit (str (fs/path dir "docs" "index.md")) "---\nokf_version: \"0.2\"\n---\n\n# Index\n")
       (spit (str (fs/path dir "README.md"))
             ;; A line between the markers is required: see the adjacent-pair case
             ;; in golden_test.clj and README "Carried-over behaviour".
