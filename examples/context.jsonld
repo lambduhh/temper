@@ -4,6 +4,7 @@
     "prov": "http://www.w3.org/ns/prov#",
     "schema": "http://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "temper": "https://w3id.org/temper#",
 
     "type": "dcterms:type",
     "title": "dcterms:title",
@@ -15,13 +16,13 @@
     "creator": "dcterms:creator",
     "contributors": { "@id": "dcterms:contributor", "@container": "@set" },
 
-    "ai_assisted": "prov:wasAttributedTo",
-    "session": "prov:wasGeneratedBy",
-    "tools": { "@id": "prov:used", "@container": "@set" },
-    "agents_skills": { "@id": "prov:used", "@container": "@set" },
+    "ai_assisted": "temper:aiAssisted",
+    "session": "temper:session",
+    "tools": { "@id": "temper:tool", "@container": "@set" },
+    "agents_skills": { "@id": "temper:agentSkill", "@container": "@set" },
 
     "review_maturity": "schema:creativeWorkStatus",
     "review_note": "dcterms:provenance",
-    "reviewed_at": { "@id": "dcterms:dateAccepted", "@type": "xsd:date" }
+    "reviewed_at": { "@id": "dcterms:dateAccepted", "@type": "xsd:dateTime" }
   }
 }

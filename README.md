@@ -38,6 +38,7 @@ The first tools, `temper.okf.*`, check and maintain Markdown documents carrying
 + RDF YAML frontmatter, driven by one EDN schema. They have a data-returning
 API, and golden tests hold them to the behaviour of the scripts they replace.
 
+- [Rationale and context](#rationale-and-context)
 - [Namespaces](#namespaces)
 - [Review from a PR](#review-from-a-pr)
 - [Lowering stale reviews](#lowering-stale-reviews)
@@ -51,6 +52,87 @@ API, and golden tests hold them to the behaviour of the scripts they replace.
 - [Carried-over behaviour](#carried-over-behaviour)
 - [Security notes](#security-notes)
 - [Testing](#testing)
+
+## Rationale and context
+
+AI context is the Markdown that agents read before they act, and more and more
+often write: guides, references, decision logs, research. As the
+[OKF spec](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#1-motivation)
+puts it, such a corpus is "continuously written and maintained by agents".
+Most of it is prose, and prose can't be checked. A sentence can say who owns a
+document and that someone reviewed it, but nothing holds the document to
+that. Nothing notices when the document is rewritten after the review it
+still claims.
+
+In 1985 Peter Naur argued, in
+[*Programming as Theory Building*](https://pages.cs.wisc.edu/~remzi/Naur.pdf),
+that a program is a theory held by the people who built it, and that the text
+is only a projection of it. Generated context makes it possible to produce the
+projection without anyone ever holding the theory. AI can generate plausible
+artifacts, but it can't establish that they're true. Only a person can make
+that claim, and ownership you can't check is just a name in a file. So the
+claims about a document move out of prose and into data: what kind of thing it
+is, what produced it, who reviewed which version, and when. They live in YAML
+frontmatter, and the rules for them live in one EDN schema.
+
+Data alone isn't enough. A key called `reviewed` means whatever its author
+meant that day. The keys need semantics defined outside this project, and two
+standards each cover half of the job:
+
+- **[OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md)
+  is the format people and agents read and edit.** It makes a directory of
+  Markdown a *bundle* that any consumer can read without bespoke code. `type`
+  is the one required key, `index.md` and `log.md` are reserved, and consumers
+  must tolerate keys and types they don't know.
+- **RDF is the graph you query.** It gives meanings through
+  [Dublin Core Terms](https://www.dublincore.org/specifications/dublin-core/dcmi-terms/)
+  (`dcterms:`) and [PROV-O](https://www.w3.org/TR/prov-o/) (`prov:`).
+  Frontmatter by itself gets you a name and a date, but not a path back to the
+  evidence. Lifted into triples, the same keys can be queried with SPARQL
+  alongside any other RDF data that uses these vocabularies.
+
+### Consistent with both, by construction
+
+Much of the value is that you don't have to pick one. Every document is plain
+YAML that you can `cat`. It conforms to OKF and lifts to RDF as it stands, with
+no translation step. The tools hold it there:
+
+| Concern | OKF says | RDF reading | How temper enforces it |
+|---|---|---|---|
+| `type` | The one required key | `dcterms:type` | `temper.okf.validate` errors when it is missing or blank |
+| Key names | Producers may add any keys | Each key maps to a `dcterms:`, `prov:` or [`temper:`](vocab/temper.ttl) IRI | `temper.okf.validate` exits 1 when a key in `:known-keys` has no mapping in the JSON-LD `@context` at `:context-file`, unless the key is in `:context-exempt` or `:context-file` is `""` |
+| Unknown keys and `type` values | Consumers must not reject them | Open world: an unmapped key is simply not lifted | Warnings, never errors |
+| Bundle root | `index.md` frontmatter may hold only `okf_version` | `okf_version` needs no mapping (`:context-exempt`) | `temper.okf.validate` checks the bundle root separately |
+| Where the mapping lives | Plain YAML frontmatter, "no required tooling" | The `@context` is [out-of-band](examples/context.jsonld) | Convention only: no tool checks that a document omits `@context` |
+
+One schema drives the validator, the scaffolder and the generated maturity
+tables. So `temper.okf.new-doc` can't write a document that
+`temper.okf.validate` rejects, and `bb maturity --check` fails when a prose
+copy of the ladder drifts from the schema.
+
+The review ladder (`review_maturity`, `reviewed_at`) is temper's own
+extension. Neither standard defines it, and OKF permits it as a producer
+extension. Its rule, that a review is an event against a version rather than a
+property of a file, is what [`bb drift`](#lowering-stale-reviews) and
+[`bb review`](#review-from-a-pr) enforce.
+
+The fit isn't exact everywhere:
+
+- **OKF moved on.** temper targets OKF v0.1 (`:okf-version "0.1"`).
+  [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01),
+  published in July 2026, adds its own provenance and trust families:
+  `generated`, `verified`, `sources`, `status` and `stale_after`. temper
+  bundles still meet v0.2's conformance conditions
+  ([§11](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#11-conformance)),
+  and v0.2 consumers must not reject a concept for a missing optional
+  family. temper doesn't write `verified`, though, so a v0.2 consumer that derives trust tiers from
+  `verified` treats every temper document as unverified, even one at L4.
+- **`reviewed_at` is typed `xsd:date`** in
+  [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
+  writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
+  produce an ill-typed literal.
+- **`review_maturity` maps to `schema:creativeWorkStatus`**, a schema.org
+  term, because neither `dcterms:` nor `prov:` has an equivalent.
 
 ## Namespaces
 
@@ -112,9 +194,20 @@ A review covers one version of a doc. For each doc at or above `:review-stalenes
 bb drift --check                    # report docs that would be lowered (exit 1 if any)
 bb drift                            # lower them
 bb drift --changed-since origin/main  # only docs changed since a ref (what the PR workflow does)
+bb drift --check --base origin/main   # all docs, plus the branch rule below
 ```
 
 If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
+
+### Reviews made on a branch
+
+When drift is given a base ref (`--base REF`, or `--changed-since REF`, which names the PR base wherever it's used), it treats a doc whose reviewed version is not reachable from `REF` as **reviewed on this branch**. For those docs, **any** word change after the review lowers the doc, not only a change past the threshold. Docs reviewed before the branch keep the threshold.
+
+Why: a squash merge makes the squash commit the baseline on the base branch. That's correct only if the squashed body is the body that was reviewed. Without this rule, an edit under the threshold made after a review on the branch would be absorbed into the new baseline, and nobody would have reviewed it. With it, a branch that passes has nothing unreviewed to absorb, so the result is the same for merge, squash and rebase merges.
+
+The fix is the same as for any drift: tick **Viewed** on the new version and run `bb review`. GitHub already clears Viewed when a file changes, so this matches what the reviewer sees. The cost is that a typo fix after a review needs another tick.
+
+The rule only protects merges if a failing check blocks them. Make the drift step a required status check on the base branch.
 
 - **The measure:** (words deleted + words inserted) / words at review, capped at 100%.
 - **How it's computed:**
@@ -131,9 +224,10 @@ If at least `:review-drift :changed-fraction` of the words changed, `review_matu
   - outside a git work tree;
   - in a shallow clone, where history is needed (use `fetch-depth: 0` in CI);
   - with a schema lacking `:review-drift`;
-  - with a `:to` at or above the floor, which would lower the same doc again on every run.
+  - with a `:to` at or above the floor, which would lower the same doc again on every run;
+  - with a base ref that doesn't name a commit, or that starts with `-`. A typo must not silently switch the branch rule off.
 - **Limits:**
-  - **A squash merge makes the squash commit the baseline,** so drift made on the branch after the review is absorbed. Run drift on the branch before merging; the PR workflow does.
+  - **Pushes straight to the base branch** have no base ref, so only the threshold applies. They involve no merge, so no squash can absorb anything.
   - **Renaming a doc and rewriting most of it in one commit** looks to git like a new file (under 50% similar), so that commit becomes the baseline.
 - **Speed:** most docs take well under a second. Same words, heavily reordered, is the worst case: about 4 s per 5,000 words.
 - **On push:** [`examples/github-actions/review-drift.yml`](examples/github-actions/review-drift.yml) runs `bb drift --changed-since` the base branch on every PR push, and commits the result.
@@ -324,6 +418,12 @@ give the full result shapes.
 [`examples/metadata-schema.edn`](examples/metadata-schema.edn) is a commented
 starting point; [`examples/context.jsonld`](examples/context.jsonld) is the
 matching JSON-LD context.
+Keys with no exact Dublin Core or PROV-O term map to the temper vocabulary,
+[`vocab/temper.ttl`](vocab/temper.ttl), namespace `https://w3id.org/temper#`
+(the w3id.org redirect is not registered yet, so the IRIs don't resolve). The
+PROV-O terms describe activities and agents, while these keys sit on the
+document and hold strings, so mapping them to `prov:` directly would make an
+RDFS reasoner infer that each document is an activity.
 
 | Key | Type | Read by | If absent | If empty |
 |---|---|---|---|---|
@@ -345,7 +445,7 @@ matching JSON-LD context.
 | `:reserved-files` | set of file names | validate | `index.md`, `log.md` validated as concept documents | Same |
 | `:bundle-root` | path | validate | No bundle-root check | — |
 | `:okf-version` | string | validate | Every bundle root fails (`okf_version must be ""`) | — |
-| `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2** |
+| `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2**. When set, each `:date-keys` value must also be written as the `@type` the context gives it (difference 11) |
 | `:context-exempt` | set of keywords | validate | Uncaught exception (exit 1) when `:context-file` is set | No exemptions |
 | `:spec-doc` | path or URL | validate (the "see ..." pointer in five messages) | Messages point at the schema file in use | Blank: same as absent |
 | `:commands` | map of tool (`:new-doc`, `:maturity`) to the command that runs it here, e.g. `{:new-doc "bb new-doc"}` | new-doc (usage line), maturity (`FAILED` line) | Messages print `bb -m temper.okf.<tool>` | A missing or blank entry falls back to the same, per tool |
@@ -477,6 +577,14 @@ behaviour are encoded as expected-difference cases in
     (`temper.okf.golden-support/renamed-prefix`); the rest must still match
     byte-for-byte, and one difference case per tool pins both raw prefixes.
     Its own commit, so it can be dropped independently.
+11. **Date values must match their JSON-LD type.** When the context coerces a
+    `:date-keys` key to `xsd:date` or `xsd:dateTime`, a value written the other
+    way (a timestamp under `xsd:date`, or a date under `xsd:dateTime`) is a
+    warning, because it would lift to RDF as an ill-typed literal. The
+    prefix is expanded from the context itself, so a context without an `xsd`
+    prefix coerces to nothing and is not checked. The example context now
+    types `reviewed_at` as `xsd:dateTime`, which is what `temper.okf.review`
+    writes. Warnings only; the exit code is unchanged.
 
 ## Carried-over behaviour
 

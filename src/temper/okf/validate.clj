@@ -36,6 +36,34 @@
    (apply str tool ": " schema-file " is missing " k
           " -- refusing to run a rule this tool cannot read." more)))
 
+(def ^:private xsd "http://www.w3.org/2001/XMLSchema#")
+
+(defn context-date-types
+  "Map of frontmatter key (keyword) to :date or :datetime, for each key the
+  JSON-LD `ctx` (the value of @context) coerces to xsd:date or xsd:dateTime.
+  Compact IRIs are expanded with the context's own prefixes, so `xsd:date` and
+  the full IRI both count. Other @type values are ignored."
+  [ctx]
+  (let [expand (fn [iri]
+                 (let [[_ prefix local] (re-matches #"([^:/]+):(.*)" (str iri))
+                       ns (get ctx prefix)]
+                   (if (and prefix (string? ns)) (str ns local) (str iri))))]
+    (into {}
+          (for [[k v] ctx
+                :when (map? v)
+                :let [t (get {(str xsd "date") :date (str xsd "dateTime") :datetime}
+                             (expand (get v "@type")))]
+                :when t]
+            [(keyword k) t]))))
+
+(defn- lexical-kind
+  "How a date value is written: :date (YYYY-MM-DD, optional offset), :datetime
+  (with a time), or nil for anything else."
+  [s]
+  (cond
+    (re-matches #"\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?" s) :date
+    (re-matches #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?" s) :datetime))
+
 (defn load-config
   "Resolve paths, read the schema, check it, and derive what a run needs.
 
@@ -82,7 +110,10 @@
               :reviewed-at-levels  (schema/reviewed-at-levels schema)
               :provenance-required (:provenance-required schema)
               :provenance-unknown  (:provenance-unknown schema)
-              :context-file        context-file}))))
+              :context-file        context-file
+              :date-types          (when context-file
+                                     (context-date-types
+                                      (-> context-file slurp json/parse-string (get "@context"))))}))))
 
 (defn- parse-date [s]
   (try (java.time.LocalDate/parse (subs (str s) 0 (min 10 (count (str s)))))
@@ -135,7 +166,7 @@
   [cfg path content]
   (let [{:keys [schema schema-file spec-doc types-hint maturity-values maturity-hint
                 maturity-by-level staleness-from reviewed-at-levels
-                provenance-required provenance-unknown]} cfg
+                provenance-required provenance-unknown context-file date-types]} cfg
         ;; The originals said "see CLAUDE.md", a file in their own repo. Point
         ;; at the consumer's :spec-doc, or else at the schema, which exists.
         see (or spec-doc schema-file)
@@ -224,10 +255,36 @@
           (doseq [k (:date-keys schema)]
             (when (contains? data k)
               (let [raw (raw-value fm k)]
-                (when-not (date-ok? raw)
+                (if-not (date-ok? raw)
                   (err! (str (name k) ": " (pr-str (or raw (get data k)))
                              " is not a valid date — use a zero-padded ISO date `YYYY-MM-DD`, e.g. 2026-06-16"
-                             " (pad single-digit months/days: 2026-6-6 → 2026-06-06)"))))))
+                             " (pad single-digit months/days: 2026-6-6 → 2026-06-06)"))
+                  ;; The JSON-LD context fixes one @type per key. A value
+                  ;; written the other way lifts to RDF as an ill-typed literal,
+                  ;; so the frontmatter would no longer say what the context
+                  ;; claims it says. A warning: OKF itself has no opinion.
+                  (let [declared (get date-types k)
+                        written  (lexical-kind raw)]
+                    (when (and declared written (not= declared written))
+                      (warn! (str (name k) ": " (pr-str raw) " is a "
+                                  (if (= written :date) "date" "timestamp") ", but " context-file
+                                  " types " (name k) " as " (if (= declared :date) "xsd:date" "xsd:dateTime")
+                                  ", so it would lift to RDF as an ill-typed literal — "
+                                  (cond
+                                    ;; Rewriting reviewed_at by hand would move
+                                    ;; drift's baseline without a review.
+                                    (and (= k :reviewed_at) (= declared :datetime))
+                                    (str "it clears at the next review (temper.okf.review writes a timestamp);"
+                                         " don't hand-edit reviewed_at, because temper.okf.drift measures"
+                                         " from the commit that last changed it")
+
+                                    (= k :reviewed_at)
+                                    (str "temper.okf.review writes timestamps, so change its @type to"
+                                         " xsd:dateTime in " context-file)
+
+                                    :else
+                                    (str "write it as a " (if (= declared :date) "date" "timestamp")
+                                         ", or change its @type in " context-file))))))))))
           (when (and (contains? data :tags) (not (sequential? (:tags data))))
             (warn! "`tags` must be a YAML list in square brackets, e.g. tags: [data-model, edn-schema]"))
           (doseq [k (keys data)]
