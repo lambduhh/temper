@@ -158,6 +158,91 @@
              true
              (catch Exception _ false)))))
 
+;; ---------------------------------------------------------------------------
+;; OKF v0.2 families (§5): generated, verified, sources, usage_window, status,
+;; stale_after. OKF forbids rejecting a document for *missing* any of them, so
+;; nothing here fires unless the key is present. A present but malformed value
+;; is a producer bug, and this tool is the producer-side gate, so those are
+;; errors.
+
+(def ^:private offset-datetime
+  "An ISO 8601 datetime with an explicit UTC offset, as OKF v0.2 §5 requires of
+  every timestamp-valued key."
+  #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})")
+
+(def ^:private actor-re
+  "OKF v0.2 §7: human:<id>, process:<id>, or <producer>/<version>."
+  #"(human|process):\S+|[^\s:/]+/\S+")
+
+(defn- key-block
+  "The raw text of top-level key `k` in frontmatter `fm`: its line plus any
+  indented continuation lines, or nil."
+  [fm k]
+  (re-find (re-pattern (str "(?m)^" (java.util.regex.Pattern/quote (name k)) ":.*(?:\\r?\\n[ \\t]+.*)*")) fm))
+
+(defn- raw-timestamps
+  "[[field raw-value] ...] for each `field:` among `fields` written in `block`.
+  Read from the text, not the parsed YAML: the parser turns 2026-06-25,
+  2026-06-25T09:00 and 2026-06-25T09:00Z alike into a java.util.Date, so the
+  offset OKF requires can't be seen after parsing."
+  [block fields]
+  (for [[_ f _ v] (re-seq (re-pattern (str "(?:^|[\\s{,])(" (str/join "|" fields) "):[ \\t]*(['\"]?)([^\\s,}\\]'\"]*)\\2")) block)]
+    [f v]))
+
+(defn validate-okf-v02
+  "Errors for malformed OKF v0.2 family values in one document. `fm` is the raw
+  frontmatter text, `data` its parsed YAML. Returns [msg ...]."
+  [fm data]
+  (let [errs (atom []) err! #(swap! errs conj %)
+        actor! (fn [where v]
+                 (cond
+                   (str/blank? (str v)) (err! (str where " is required — an OKF actor such as `human:<id>`, `process:<id>` or `<producer>/<version>` (OKF v0.2 §7)"))
+                   (not (re-matches actor-re (str v))) (err! (str where " " (pr-str (str v)) " is not an OKF actor — use `human:<id>`, `process:<id>` or `<producer>/<version>`, e.g. claude-code/claude-opus-5-5 (OKF v0.2 §7)"))))
+        times! (fn [k fields]
+                 (doseq [[f v] (raw-timestamps (key-block fm k) fields)
+                         :when (not (re-matches offset-datetime v))]
+                   (err! (str (name k) ": `" f ": " v "` must be an ISO 8601 datetime with a UTC offset,"
+                              " e.g. 2026-06-30T14:00:00Z (OKF v0.2 §5)"))))]
+    (when (contains? data :generated)
+      (let [g (:generated data)]
+        (if-not (map? g)
+          (err! "`generated` must be a mapping, e.g. generated: { by: claude-code/claude-opus-5-5, at: 2026-06-30T14:00:00Z } (OKF v0.2 §5.2)")
+          (do (actor! "generated.by" (:by g))
+              (times! :generated ["at"])))))
+    (when (contains? data :verified)
+      (let [v (:verified data)
+            events (cond (map? v) [v] (sequential? v) v)]
+        (if (or (nil? events) (not-every? map? events))
+          (err! "`verified` must be a { by, at } mapping or a list of them (OKF v0.2 §5.2)")
+          (do (doseq [e events]
+                (actor! "verified.by" (:by e))
+                (when (nil? (:at e)) (err! "verified.at is required in every verification event (OKF v0.2 §5.2)")))
+              (times! :verified ["at"])))))
+    (when (contains? data :sources)
+      (let [s (:sources data)]
+        (if-not (and (sequential? s) (every? map? s))
+          (err! "`sources` must be a list of mappings, each with a `resource` (OKF v0.2 §5.1)")
+          (do (doseq [e s]
+                (when (str/blank? (str (:resource e)))
+                  (err! "every `sources` entry needs a `resource` (OKF v0.2 §5.1)"))
+                (when (and (contains? e :usage_count)
+                           (not (and (integer? (:usage_count e)) (not (neg? (:usage_count e))))))
+                  (err! (str "sources usage_count " (pr-str (:usage_count e)) " must be a non-negative integer (OKF v0.2 §5.1)"))))
+              (times! :sources ["last_modified"])))))
+    (when (contains? data :usage_window)
+      (let [w (:usage_window data)]
+        (if-not (and (map? w) (contains? w :from) (contains? w :to))
+          (err! "`usage_window` must be a { from, to } mapping (OKF v0.2 §5.1)")
+          (times! :usage_window ["from" "to"]))))
+    (when (contains? data :status)
+      (when-not (#{"draft" "stable" "deprecated"} (str (:status data)))
+        (err! (str "status " (pr-str (str (:status data))) " must be one of draft, stable, deprecated (OKF v0.2 §5.4)"))))
+    (when (contains? data :stale_after)
+      (let [raw (raw-value fm :stale_after)]
+        (when-not (and raw (re-matches offset-datetime raw))
+          (err! (str "stale_after " (pr-str raw) " must be an ISO 8601 datetime with a UTC offset, e.g. 2026-09-23T00:00:00Z (OKF v0.2 §5.5)")))))
+    @errs))
+
 (defn validate-concept
   "Check one concept document. `cfg` is the map load-config returns. Returns
   {:path path :errors [msg ...] :warnings [msg ...]}."
@@ -279,6 +364,7 @@
                                     :else
                                     (str "write it as a " (if (= declared :date) "date" "timestamp")
                                          ", or change its @type in " context-file))))))))))
+          (run! err! (validate-okf-v02 fm data))
           (when (and (contains? data :tags) (not (sequential? (:tags data))))
             (warn! "`tags` must be a YAML list in square brackets, e.g. tags: [data-model, edn-schema]"))
           (doseq [k (keys data)]

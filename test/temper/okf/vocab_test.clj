@@ -22,10 +22,17 @@
 (defn- used-terms []
   (let [ctx (-> (str (fs/path g/root "examples" "context.jsonld")) slurp json/parse-string (get "@context"))]
     (is (= ns-iri (get ctx "temper")) "the context's temper prefix is the vocabulary namespace")
-    (->> (vals ctx)
-         (map #(if (map? %) (get % "@id") %))
-         (keep #(when (string? %) (second (re-matches #"temper:(\w+)" %))))
-         set)))
+    ;; Walk scoped contexts too: generated, verified, sources and usage_window
+    ;; map their nested keys in an @context of their own.
+    (letfn [(iris [ctx]
+              (mapcat (fn [v]
+                        (cond (string? v) [v]
+                              (map? v) (cons (get v "@id") (some-> (get v "@context") iris))
+                              :else nil))
+                      (vals ctx)))]
+      (->> (iris ctx)
+           (keep #(when (string? %) (second (re-matches #"temper:(\w+)" %))))
+           set))))
 
 (deftest context-and-vocabulary-agree
   (let [defined (defined-terms) used (used-terms)]
