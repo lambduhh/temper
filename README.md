@@ -412,6 +412,12 @@ give the full result shapes.
 [`examples/metadata-schema.edn`](examples/metadata-schema.edn) is a commented
 starting point; [`examples/context.jsonld`](examples/context.jsonld) is the
 matching JSON-LD context.
+Keys with no exact Dublin Core or PROV-O term map to the temper vocabulary,
+[`vocab/temper.ttl`](vocab/temper.ttl), namespace `https://w3id.org/temper#`
+(the w3id.org redirect is not registered yet, so the IRIs don't resolve). The
+PROV-O terms describe activities and agents, while these keys sit on the
+document and hold strings, so mapping them to `prov:` directly would make an
+RDFS reasoner infer that each document is an activity.
 
 | Key | Type | Read by | If absent | If empty |
 |---|---|---|---|---|
