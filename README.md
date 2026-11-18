@@ -131,8 +131,6 @@ The fit isn't exact everywhere:
   [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
   writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
   produce an ill-typed literal.
-- **`review_maturity` maps to `schema:creativeWorkStatus`**, a schema.org
-  term, because neither `dcterms:` nor `prov:` has an equivalent.
 
 ## Namespaces
 
