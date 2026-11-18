@@ -8,9 +8,10 @@
   are compared parsed (trimmed, unquoted), so reformatting the line, or a body
   line that happens to start with `reviewed_at:`, does not move the baseline.
 
-  Limits: a squash merge makes the squash commit the baseline, so edits made on
-  the branch after the review are absorbed. Run drift on the branch (e.g. on
-  every PR push) before merging."
+  A squash merge makes the squash commit the baseline. That is correct only if
+  the squashed body is the reviewed body; temper.okf.drift enforces this on the
+  branch when it is given a base ref (any change after a review made on the
+  branch lowers the doc), so the merge method doesn't matter."
   (:require [babashka.process :as p]
             [clojure.string :as str]
             [temper.okf.frontmatter :as fm]))
