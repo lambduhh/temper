@@ -118,14 +118,14 @@ property of a file, is what [`bb drift`](#lowering-stale-reviews) and
 
 The fit isn't exact everywhere:
 
-- **OKF v0.2 is checked, not yet written.** The example schema targets
+- **OKF v0.2 starts at the next review.** The example schema targets
   [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01)
   (`:okf-version "0.2"`), and `temper.okf.validate` checks the shape of its
   families (`generated`, `verified`, `sources`, `usage_window`, `status`,
   `stale_after`) whenever they are present (difference 8). In a 0.2 bundle,
-  `bb review` writes `verified` and `bb drift` removes it when it lowers a
-  doc, so a v0.2 consumer's trust tier follows temper's ladder from the next
-  review on. Docs reviewed before the bundle moved to 0.2 have no `verified`
+  `bb new-doc --generated-by` writes `generated`, `bb review` writes
+  `verified`, and `bb drift` removes `verified` when it lowers a doc, so a
+  v0.2 consumer's trust tier follows temper's ladder from the next review on. Docs reviewed before the bundle moved to 0.2 have no `verified`
   until they are reviewed again.
 - **`reviewed_at` is typed `xsd:date`** in
   [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
@@ -266,6 +266,7 @@ tasks for a consuming project.
 | `temper.okf.new-doc` | `--force` | Overwrite an existing file. Takes the next argument as its value only if that argument does not start with `--` |
 | `temper.okf.new-doc` | `--ai-assisted M` | Marks the document AI-assisted; every key in `:provenance-required` then becomes a required flag |
 | `temper.okf.new-doc` | `--session S`, `--tools a,b`, `--agents-skills url,url` | Provenance values |
+| `temper.okf.new-doc` | `--generated-by A` | When the schema targets OKF 0.2: writes `generated: { by: A, at: <now> }`. Required with `--ai-assisted`; `A` must be an OKF actor (`human:<id>`, `process:<id>`, `<producer>/<version>`). Before 0.2 it is ignored with a warning. Not shown in the usage line, which golden parity pins |
 
 Argument parsing:
 

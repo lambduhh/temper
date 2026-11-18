@@ -69,6 +69,15 @@
   (when-let [[level] (parse-maturity value)]
     (first (keep-indexed (fn [i {l :level}] (when (= l level) i)) (maturity-levels schema)))))
 
+(def okf-actor-re
+  "OKF v0.2 §7 actor: human:<id>, process:<id>, or <producer>/<version>."
+  #"(human|process):\S+|[^\s:/]+/\S+")
+
+(defn okf-actor?
+  "True when `s` is an OKF v0.2 actor string."
+  [s]
+  (boolean (and (string? s) (re-matches okf-actor-re s))))
+
 (defn okf-v02?
   "True when the schema targets OKF 0.2 or later (:okf-version as
   <major>.<minor>). The tools write the v0.2 families (generated, verified)

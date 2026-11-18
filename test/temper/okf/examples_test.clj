@@ -27,7 +27,8 @@
             "<!-- review-maturity:table:begin -->\n\n<!-- review-maturity:table:end -->\n")
       (let [scaffold (run-tool dir "temper.okf.new-doc" "--type" "Guide" "--title" "First doc"
                                "--path" "docs/first.md" "--ai-assisted" "Claude via Claude Code"
-                               "--session" "s1" "--tools" "babashka")]
+                               "--session" "s1" "--tools" "babashka"
+                               "--generated-by" "claude-code/claude-opus-5-5")]
         (is (= 0 (:exit scaffold)) (:out scaffold)))
       (testing "validate"
         (let [{:keys [exit out]} (run-tool dir "temper.okf.validate")]
