@@ -100,7 +100,7 @@ no translation step. The tools hold it there:
 | Concern | OKF says | RDF reading | How temper enforces it |
 |---|---|---|---|
 | `type` | The one required key | `dcterms:type` | `temper.okf.validate` errors when it is missing or blank |
-| Key names | Producers may add any keys | Each key maps to a `dcterms:` or `prov:` IRI | `temper.okf.validate` exits 1 when a key in `:known-keys` has no mapping in the JSON-LD `@context` at `:context-file`, unless the key is in `:context-exempt` or `:context-file` is `""` |
+| Key names | Producers may add any keys | Each key maps to a `dcterms:`, `prov:` or [`temper:`](vocab/temper.ttl) IRI | `temper.okf.validate` exits 1 when a key in `:known-keys` has no mapping in the JSON-LD `@context` at `:context-file`, unless the key is in `:context-exempt` or `:context-file` is `""` |
 | Unknown keys and `type` values | Consumers must not reject them | Open world: an unmapped key is simply not lifted | Warnings, never errors |
 | Bundle root | `index.md` frontmatter may hold only `okf_version` | `okf_version` needs no mapping (`:context-exempt`) | `temper.okf.validate` checks the bundle root separately |
 | Where the mapping lives | Plain YAML frontmatter, "no required tooling" | The `@context` is [out-of-band](examples/context.jsonld) | Convention only: no tool checks that a document omits `@context` |
@@ -127,12 +127,6 @@ The fit isn't exact everywhere:
   and v0.2 consumers must not reject a concept for a missing optional
   family. temper doesn't write `verified`, though, so a v0.2 consumer that derives trust tiers from
   `verified` treats every temper document as unverified, even one at L4.
-- **Some PROV-O terms sit on the document rather than on an activity.**
-  `tools` and `agents_skills` map to `prov:used`, whose domain is
-  `prov:Activity`, so an RDFS reasoner would infer that the document is an
-  activity. `session` and `ai_assisted` are strings where PROV-O expects an
-  Activity and an Agent. The triples read back faithfully, but they aren't
-  strict PROV.
 - **`review_maturity` maps to `schema:creativeWorkStatus`**, a schema.org
   term, because neither `dcterms:` nor `prov:` has an equivalent.
 
@@ -196,9 +190,20 @@ A review covers one version of a doc. For each doc at or above `:review-stalenes
 bb drift --check                    # report docs that would be lowered (exit 1 if any)
 bb drift                            # lower them
 bb drift --changed-since origin/main  # only docs changed since a ref (what the PR workflow does)
+bb drift --check --base origin/main   # all docs, plus the branch rule below
 ```
 
 If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
+
+### Reviews made on a branch
+
+When drift is given a base ref (`--base REF`, or `--changed-since REF`, which names the PR base wherever it's used), it treats a doc whose reviewed version is not reachable from `REF` as **reviewed on this branch**. For those docs, **any** word change after the review lowers the doc, not only a change past the threshold. Docs reviewed before the branch keep the threshold.
+
+Why: a squash merge makes the squash commit the baseline on the base branch. That's correct only if the squashed body is the body that was reviewed. Without this rule, an edit under the threshold made after a review on the branch would be absorbed into the new baseline, and nobody would have reviewed it. With it, a branch that passes has nothing unreviewed to absorb, so the result is the same for merge, squash and rebase merges.
+
+The fix is the same as for any drift: tick **Viewed** on the new version and run `bb review`. GitHub already clears Viewed when a file changes, so this matches what the reviewer sees. The cost is that a typo fix after a review needs another tick.
+
+The rule only protects merges if a failing check blocks them. Make the drift step a required status check on the base branch.
 
 - **The measure:** (words deleted + words inserted) / words at review, capped at 100%.
 - **How it's computed:**
@@ -215,9 +220,10 @@ If at least `:review-drift :changed-fraction` of the words changed, `review_matu
   - outside a git work tree;
   - in a shallow clone, where history is needed (use `fetch-depth: 0` in CI);
   - with a schema lacking `:review-drift`;
-  - with a `:to` at or above the floor, which would lower the same doc again on every run.
+  - with a `:to` at or above the floor, which would lower the same doc again on every run;
+  - with a base ref that doesn't name a commit, or that starts with `-`. A typo must not silently switch the branch rule off.
 - **Limits:**
-  - **A squash merge makes the squash commit the baseline,** so drift made on the branch after the review is absorbed. Run drift on the branch before merging; the PR workflow does.
+  - **Pushes straight to the base branch** have no base ref, so only the threshold applies. They involve no merge, so no squash can absorb anything.
   - **Renaming a doc and rewriting most of it in one commit** looks to git like a new file (under 50% similar), so that commit becomes the baseline.
 - **Speed:** most docs take well under a second. Same words, heavily reordered, is the worst case: about 4 s per 5,000 words.
 - **On push:** [`examples/github-actions/review-drift.yml`](examples/github-actions/review-drift.yml) runs `bb drift --changed-since` the base branch on every PR push, and commits the result.
@@ -408,6 +414,12 @@ give the full result shapes.
 [`examples/metadata-schema.edn`](examples/metadata-schema.edn) is a commented
 starting point; [`examples/context.jsonld`](examples/context.jsonld) is the
 matching JSON-LD context.
+Keys with no exact Dublin Core or PROV-O term map to the temper vocabulary,
+[`vocab/temper.ttl`](vocab/temper.ttl), namespace `https://w3id.org/temper#`
+(the w3id.org redirect is not registered yet, so the IRIs don't resolve). The
+PROV-O terms describe activities and agents, while these keys sit on the
+document and hold strings, so mapping them to `prov:` directly would make an
+RDFS reasoner infer that each document is an activity.
 
 | Key | Type | Read by | If absent | If empty |
 |---|---|---|---|---|

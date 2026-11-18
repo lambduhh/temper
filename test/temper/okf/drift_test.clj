@@ -197,6 +197,78 @@
       (is (not-any? #{"docs/a.md"} (map :path (concat (:lowered res) (:checked res))))))))
 
 ;; ---------------------------------------------------------------------------
+;; Reviews made on the branch must cover the merged version
+
+(defn- review-on-branch!
+  "main has a.md reviewed; branch `pr` reviews b.md (new reviewed_at), then
+  replaces 5 of its 100 words (10%, under the 20% threshold)."
+  [dir]
+  (spit (str (fs/path dir "docs/b.md")) (doc :reviewed-at "2026-11-11T09:00:00Z"))
+  (commit! dir "b at L2 on main")
+  (git! dir "switch" "-q" "-c" "pr")
+  (let [b (str (fs/path dir "docs/b.md"))]
+    (spit b (str/replace (slurp b) "2026-11-11T09:00:00Z" "2026-11-18T09:00:00Z"))
+    (commit! dir "re-review b on the branch")
+    (spit b (str/replace (slurp b) #"w1 w2 w3 w4 w5 " "v1 v2 v3 v4 v5 "))
+    (commit! dir "small edit after the review")
+    b))
+
+(deftest an-edit-after-a-review-on-the-branch-lowers-at-any-size
+  (let [{:keys [dir]} (repo)
+        b (review-on-branch! dir)]
+    (testing "without a base, 10% is under the threshold"
+      (is (empty? (:lowered (d/run {:root dir :check true})))))
+    (testing "with --base, any change after a review made on the branch lowers"
+      (let [res (d/run {:root dir :check true :base "main"})]
+        (is (= 1 (:exit res)))
+        (is (= [["docs/b.md" true]] (map (juxt :path :on-branch?) (:lowered res))))
+        (is (str/includes? (d/report res) "would lower docs/b.md to L1: changed after its review on this branch (10% of words since "))))
+    (testing "--changed-since names the PR base, so it turns the rule on too"
+      (is (= ["docs/b.md"] (map :path (:lowered (d/run {:root dir :check true :changed-since "main"}))))))
+    (testing "write mode says why in review_note"
+      (d/run {:root dir :base "main"})
+      (is (re-find #"review_note: \"Lowered to L1: changed after its review at [0-9a-f]{7} on this branch \(10% of words\)\. A review made on a branch must cover the version that is merged\.\"" (slurp b))))))
+
+(deftest docs-reviewed-before-the-branch-keep-the-threshold
+  (let [{:keys [dir f]} (repo)]
+    (git! dir "switch" "-q" "-c" "pr")
+    (spit f (str/replace (slurp f) #"w1 w2 w3 w4 w5 " "v1 v2 v3 v4 v5 "))
+    (commit! dir "small edit to a doc reviewed on main")
+    (let [res (d/run {:root dir :check true :base "main"})]
+      (is (= 0 (:exit res)))
+      (is (= [["docs/a.md" false]] (map (juxt :path :on-branch?) (:checked res)))))))
+
+(deftest a-review-with-no-edit-after-it-passes
+  (let [{:keys [dir]} (repo)]
+    (git! dir "switch" "-q" "-c" "pr")
+    (spit (str (fs/path dir "docs/b.md")) (doc :reviewed-at "2026-11-18T09:00:00Z"))
+    (commit! dir "new doc, reviewed on the branch")
+    (let [res (d/run {:root dir :check true :base "main"})]
+      (is (= 0 (:exit res)))
+      (is (= [["docs/a.md" false] ["docs/b.md" true]] (map (juxt :path :on-branch?) (:checked res)))))))
+
+(deftest squash-merge-is-safe-once-the-branch-passes
+  (testing "re-review clears the branch check; after a squash merge, main measures from the reviewed body"
+    (let [{:keys [dir]} (repo)
+          b (review-on-branch! dir)]
+      (spit b (r/bump schema (slurp b) {:target "L2" :reviewed-at "2026-11-18T12:00:00Z" :note "re-viewed"}))
+      (commit! dir "re-review after the edit")
+      (is (= 0 (:exit (d/run {:root dir :check true :base "main"}))) "the branch passes")
+      (let [reviewed-body (fm/body (slurp b))]
+        (git! dir "switch" "-q" "main")
+        (git! dir "merge" "-q" "--squash" "pr")
+        (commit! dir "squash")
+        (let [res (d/run {:root dir :check true})]
+          (is (= 0 (:exit res)))
+          (is (= 0.0 (:fraction (first (filter #(= "docs/b.md" (:path %)) (:checked res))))))
+          (is (= reviewed-body (fm/body (slurp b))) "what main measures from is what was reviewed"))))))
+
+(deftest a-bad-base-is-a-config-error
+  (let [{:keys [dir]} (repo)]
+    (is (= 2 (:exit (d/run {:root dir :base "no-such-ref"}))) "a typo must not turn the rule off")
+    (is (= 2 (:exit (d/run {:root dir :base "--output=x"}))) "never passed to git as an option")))
+
+;; ---------------------------------------------------------------------------
 ;; Frontmatter
 
 (deftest frontmatter-edge-cases
