@@ -20,7 +20,7 @@
             {:keys [out err exit]}
             @(p/process [g/bb "--classpath" g/src-dir "-e"
                          (str "(require 'temper.okf.config 'temper.okf.cli 'temper.okf.schema 'temper.okf.validate"
-                              " 'temper.okf.links 'temper.okf.maturity 'temper.okf.new-doc 'temper.okf.review)"
+                              " 'temper.okf.links 'temper.okf.maturity 'temper.okf.new-doc 'temper.okf.review 'temper.okf.drift 'temper.okf.frontmatter 'temper.okf.history)"
                               " (print :loaded)")]
                         {:dir (str dir) :env env :out :string :err :string})]
         (is (= ":loaded" out))
