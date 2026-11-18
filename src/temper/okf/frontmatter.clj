@@ -67,3 +67,17 @@
   [content kvs]
   (let [[fm rest] (split content)]
     (str "---\n" (reduce (fn [fm [k v]] (set-key fm k v)) fm kvs) "\n---\n" rest)))
+
+(defn remove-key
+  "Frontmatter text without top-level key `k`: its line and any indented
+  continuation lines. Unchanged when `k` is absent."
+  [fm k]
+  (let [re (re-pattern (str "(?m)^" (java.util.regex.Pattern/quote (name k)) ":.*(?:\\r?\\n[ \\t]+.*)*(?:\\r?\\n|\\z)"))]
+    (str/replace-first fm re "")))
+
+(defn remove-keys
+  "Content with each key in `ks` removed from its frontmatter. The body is
+  left exactly as it was."
+  [content ks]
+  (let [[fm rest] (split content)]
+    (str "---\n" (str/trimr (reduce remove-key fm ks)) "\n---\n" rest)))

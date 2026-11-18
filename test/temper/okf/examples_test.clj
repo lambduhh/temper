@@ -20,14 +20,15 @@
       (fs/create-dirs (fs/path dir "docs"))
       (fs/copy (fs/path g/root "examples" "metadata-schema.edn") (fs/path dir "docs" "metadata-schema.edn"))
       (fs/copy (fs/path g/root "examples" "context.jsonld") (fs/path dir "docs" "context.jsonld"))
-      (spit (str (fs/path dir "docs" "index.md")) "---\nokf_version: \"0.1\"\n---\n\n# Index\n")
+      (spit (str (fs/path dir "docs" "index.md")) "---\nokf_version: \"0.2\"\n---\n\n# Index\n")
       (spit (str (fs/path dir "README.md"))
             ;; A line between the markers is required: see the adjacent-pair case
             ;; in golden_test.clj and README "Carried-over behaviour".
             "<!-- review-maturity:table:begin -->\n\n<!-- review-maturity:table:end -->\n")
       (let [scaffold (run-tool dir "temper.okf.new-doc" "--type" "Guide" "--title" "First doc"
                                "--path" "docs/first.md" "--ai-assisted" "Claude via Claude Code"
-                               "--session" "s1" "--tools" "babashka")]
+                               "--session" "s1" "--tools" "babashka"
+                               "--generated-by" "claude-code/claude-opus-5-5")]
         (is (= 0 (:exit scaffold)) (:out scaffold)))
       (testing "validate"
         (let [{:keys [exit out]} (run-tool dir "temper.okf.validate")]

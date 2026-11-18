@@ -46,7 +46,10 @@
  :known-keys      #{:type :title :description :tags :created :modified :source
                     :creator :contributors :ai_assisted :session :tools
                     :agents_skills :review_maturity :review_note :reviewed_at
-                    :okf_version}
+                    :okf_version
+                    ;; OKF v0.2 families (§5). temper.okf.validate checks their shape
+                    ;; whenever they are present.
+                    :generated :verified :sources :usage_window :status :stale_after}
 
  ;; A review is an event against a version, not a permanent property of a file.
  ;; Without this, a document can be reviewed, rewritten, and still claim the
@@ -111,7 +114,7 @@
 
  ;; The OKF bundle root: the one index.md permitted frontmatter (okf_version only).
  :bundle-root     "docs/index.md"
- :okf-version     "0.1"
+ :okf-version     "0.2"
 
  ;; JSON-LD context that maps frontmatter keys to dcterms:/prov: IRIs. Every
  ;; known key except those listed in :context-exempt must have a mapping there.

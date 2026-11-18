@@ -92,3 +92,21 @@
   back to the schema file, which always exists once the run has got this far."
   [schema]
   (non-blank (:spec-doc schema)))
+
+(def okf-actor-re
+  "OKF v0.2 §7 actor: human:<id>, process:<id>, or <producer>/<version>."
+  #"(human|process):\S+|[^\s:/]+/\S+")
+
+(defn okf-actor?
+  "True when `s` is an OKF v0.2 actor string."
+  [s]
+  (boolean (and (string? s) (re-matches okf-actor-re s))))
+
+(defn okf-v02?
+  "True when the schema targets OKF 0.2 or later (:okf-version as
+  <major>.<minor>). The tools write the v0.2 families (generated, verified)
+  only then, so a bundle that still declares 0.1 is left as it was."
+  [schema]
+  (if-let [[_ major minor] (re-matches #"(\d+)\.(\d+)" (str (:okf-version schema)))]
+    (or (pos? (parse-long major)) (>= (parse-long minor) 2))
+    false))

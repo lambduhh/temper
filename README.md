@@ -118,15 +118,16 @@ property of a file, is what [`bb drift`](#lowering-stale-reviews) and
 
 The fit isn't exact everywhere:
 
-- **OKF moved on.** temper targets OKF v0.1 (`:okf-version "0.1"`).
-  [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01),
-  published in July 2026, adds its own provenance and trust families:
-  `generated`, `verified`, `sources`, `status` and `stale_after`. temper
-  bundles still meet v0.2's conformance conditions
-  ([§11](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#11-conformance)),
-  and v0.2 consumers must not reject a concept for a missing optional
-  family. temper doesn't write `verified`, though, so a v0.2 consumer that derives trust tiers from
-  `verified` treats every temper document as unverified, even one at L4.
+- **OKF v0.2 starts at the next review.** The example schema targets
+  [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01)
+  (`:okf-version "0.2"`), and `temper.okf.validate` checks the shape of its
+  families (`generated`, `verified`, `sources`, `usage_window`, `status`,
+  `stale_after`) whenever they are present (difference 12). In a 0.2 bundle,
+  `bb new-doc --generated-by` writes `generated`, `bb review` writes
+  `verified`, and `bb drift` removes `verified` when it lowers a doc, so a
+  v0.2 consumer's trust tier follows temper's ladder from the next review on.
+  Docs reviewed before the bundle moved to 0.2 have no `verified` until
+  they are reviewed again.
 
 ## Namespaces
 
@@ -167,6 +168,7 @@ For each Markdown file under the docs dir that **you** marked Viewed:
 
 - **`reviewed_at` is a UTC timestamp** (`2026-11-11T23:41:05Z`), so every review changes it, even a second one on the same day. Drift finds the reviewed version by that change. The validator reads the date part.
 - **`review_note`:** `"Viewed by <login> in PR #<n> on <date>."`
+- **`verified`** (only when the schema's `:okf-version` is 0.2 or later): `{ by: "human:<login>", at: <reviewed_at> }`, the [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#52-trust-generated-and-verified) record of the review. Only the latest review is kept; earlier ones are in git history.
 - **It never lowers a level.** A file changed on GitHub after you viewed it shows as *dismissed*, not viewed, so only the version you saw counts.
 - **`--commit` checks first, and writes nothing if any check fails:**
   - the current branch and `HEAD` are the PR's head branch and commit as GitHub shows them;
@@ -191,7 +193,7 @@ bb drift --changed-since origin/main  # only docs changed since a ref (what the 
 bb drift --check --base origin/main   # all docs, plus the branch rule below
 ```
 
-If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
+If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. In a bundle targeting OKF 0.2, `verified` is removed too: v0.2 consumers derive the trust tier from it alone, and the review it records no longer covers the current version. Ticking **Viewed** again, then running `bb review`, raises it back.
 
 ### Reviews made on a branch
 
@@ -261,6 +263,7 @@ tasks for a consuming project.
 | `temper.okf.new-doc` | `--force` | Overwrite an existing file. Takes the next argument as its value only if that argument does not start with `--` |
 | `temper.okf.new-doc` | `--ai-assisted M` | Marks the document AI-assisted; every key in `:provenance-required` then becomes a required flag |
 | `temper.okf.new-doc` | `--session S`, `--tools a,b`, `--agents-skills url,url` | Provenance values |
+| `temper.okf.new-doc` | `--generated-by A` | When the schema targets OKF 0.2: writes `generated: { by: A, at: <now> }`. Required with `--ai-assisted`; `A` must be an OKF actor (`human:<id>`, `process:<id>`, `<producer>/<version>`). Before 0.2 it is ignored with a warning. Not shown in the usage line, which golden parity pins |
 
 Argument parsing:
 
@@ -579,6 +582,14 @@ behaviour are encoded as expected-difference cases in
     prefix coerces to nothing and is not checked. The example context now
     types `reviewed_at` as `xsd:dateTime`, which is what `temper.okf.review`
     writes. Warnings only; the exit code is unchanged.
+12. **OKF v0.2 families are checked.** When a document carries `generated`,
+    `verified`, `sources`, `usage_window`, `status` or `stale_after`, a
+    malformed value is an error: a missing or non-actor `by`, a timestamp
+    without a time or UTC offset, a `sources` entry with no `resource`, a
+    `status` other than draft, stable or deprecated. A missing family is never
+    an error, since OKF forbids rejecting a document for one. Timestamps are
+    checked against the written text, because the YAML parser turns dates and
+    offset-less datetimes into the same `java.util.Date`.
 
 ## Carried-over behaviour
 

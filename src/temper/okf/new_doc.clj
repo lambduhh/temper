@@ -32,6 +32,7 @@
             [clojure.java.io :as io]
             [temper.okf.cli :as cli]
             [temper.okf.config :as config]
+            [temper.okf.frontmatter :as fm]
             [temper.okf.schema :as schema]))
 
 (def ^:private tool
@@ -45,7 +46,7 @@
   other `--flag value` is passed through, because :provenance-required in a
   schema may name any key and the original looked each one up among all the
   flags given."
-  [:today])
+  [:today :now])
 
 (def ^:private optional-value-flags
   "Flags that may stand alone. The usage line has always shown `[--force]`,
@@ -109,7 +110,8 @@
   "The full text of a new document: frontmatter block plus an H1. Pure.
   `:tags`, `:tools`, `:agents-skills` and `:source` are seqs of strings."
   [schema {:keys [type title description tags today
-                  ai-assisted session tools agents-skills source]}]
+                  ai-assisted session tools agents-skills source
+                  generated-by now]}]
   (str "---\n"
        "type: " type "\n"
        "title: " (yaml-scalar title) "\n"
@@ -125,6 +127,9 @@
               (when session (str "session: " session "\n"))
               (when (seq tools) (flow-list "tools" tools))
               (flow-list "agents_skills" (or agents-skills []))))
+       ;; OKF v0.2 §5.2. `run` passes :generated-by only for a 0.2 bundle.
+       (when generated-by
+         (str "generated: { by: " (fm/yaml-str generated-by) ", at: " now " }\n"))
        ;; A scaffold produced from flags alone is AI-generated; one a human
        ;; specified and directed is L1. See the ladder in CLAUDE.md.
        (let [maturity (if ai-assisted
@@ -176,7 +181,10 @@
     :session
     :tools :agents-skills   comma-separated string, or a collection
     :docs-dir :schema       see temper.okf.config/resolve-paths
+    :generated-by           OKF actor for `generated.by`; required with :ai-assisted when the
+                            schema targets OKF 0.2, ignored (with a warning) before 0.2
     :today                  date string for created/modified (default: today)
+    :now                    timestamp for `generated.at` (default: now, UTC, to the second)
 
   Returns
     {:exit 0 :path p :text written-text :warnings [..] :docs-dir d :command c}   on success,
@@ -192,7 +200,8 @@
            command  (schema/command schema :new-doc)
            warnings (atom [])
            {:keys [type title path description tags force
-                   ai-assisted session tools agents-skills source]} opts]
+                   ai-assisted session tools agents-skills source generated-by]} opts
+           v02      (schema/okf-v02? schema)]
        (try
          (when-not type  (usage-error! "--type is required"))
          (when-not title (usage-error! "--title is required"))
@@ -213,6 +222,20 @@
                        " (:provenance-required in " schema-file ")."
                        " If it genuinely was not captured, pass " flag " "
                        (pr-str (:provenance-unknown schema))))))))
+         ;; OKF v0.2: an AI-drafted doc must say which agent generated it, as
+         ;; an actor (§7). Required only for AI-assisted docs; a human-authored
+         ;; one may omit `generated`, which OKF permits. No default identity is
+         ;; guessed: that would mean a git or network call.
+         (when (and v02 ai-assisted (blank-opt? generated-by))
+           (usage-error! (str "--ai-assisted was given and " schema-file " targets OKF " (:okf-version schema)
+                              ", so --generated-by is required too: an OKF actor such as"
+                              " claude-code/claude-opus-5-5 (OKF v0.2 §7)")))
+         (when (and v02 (not (blank-opt? generated-by)) (not (schema/okf-actor? generated-by)))
+           (usage-error! (str "--generated-by " (pr-str generated-by) " is not an OKF actor: use"
+                              " human:<id>, process:<id> or <producer>/<version> (OKF v0.2 §7)")))
+         (when (and (not v02) (not (blank-opt? generated-by)))
+           (swap! warnings conj (str "--generated-by ignored: " schema-file " targets OKF "
+                                     (pr-str (:okf-version schema)) ", and `generated` is an OKF 0.2 field")))
          (when-not (contains? (:types schema) type)
            (swap! warnings conj
                   (str "type \"" type "\" is not in the taxonomy ("
@@ -231,7 +254,11 @@
                                     :session       session
                                     :tools         (csv tools)
                                     :agents-skills (csv agents-skills)
-                                    :source        (csv source)})]
+                                    :source        (csv source)
+                                    :generated-by  (when (and v02 (not (blank-opt? generated-by))) generated-by)
+                                    :now           (or (:now opts)
+                                                       (str (.truncatedTo (java.time.Instant/now)
+                                                                          java.time.temporal.ChronoUnit/SECONDS)))})]
              (assert-valid-frontmatter! text path)
              (spit f text)
              {:exit 0 :path path :text text :warnings @warnings :docs-dir docs-dir
