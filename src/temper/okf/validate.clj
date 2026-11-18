@@ -75,6 +75,7 @@
       (merge derived
              {:docs-dir            docs-dir
               :schema-file         schema-file
+              :spec-doc            (schema/spec-doc schema)
               :schema              schema
               :staleness-from      (get-in schema [:review-staleness :from])
               :reviewed-at-levels  (schema/reviewed-at-levels schema)
@@ -131,15 +132,19 @@
   "Check one concept document. `cfg` is the map load-config returns. Returns
   {:path path :errors [msg ...] :warnings [msg ...]}."
   [cfg path content]
-  (let [{:keys [schema schema-file types-hint maturity-values maturity-hint
+  (let [{:keys [schema schema-file spec-doc types-hint maturity-values maturity-hint
                 maturity-by-level staleness-from reviewed-at-levels
                 provenance-required provenance-unknown]} cfg
+        ;; The originals said "see CLAUDE.md", a file in their own repo. Point
+        ;; at the consumer's :spec-doc, or else at the schema, which exists.
+        see (or spec-doc schema-file)
         canonical #(schema/canonical-maturity schema %)
         errs (atom []) warns (atom [])
         err! #(swap! errs conj %) warn! #(swap! warns conj %)
         fm (extract-frontmatter content)]
     (if-not fm
-      (err! "no YAML frontmatter — add a `---` … `---` block at the very top of the file, with at least `type:` (see CLAUDE.md)")
+      (err! (str "no YAML frontmatter — add a `---` … `---` block at the very top of the file,"
+                 " with at least `type:` (see " see ")"))
       (let [data (try (yaml/parse-string fm)
                       (catch Exception e
                         (err! (str "frontmatter is not valid YAML: " (.getMessage e)
@@ -160,7 +165,7 @@
                 (not (contains? maturity-values level))
                 (err! (str "invalid review_maturity " (pr-str (str rm)) " — use one of " maturity-hint
                            ", optionally with its label, e.g. " (pr-str (canonical "L2"))
-                           " (L0 AI-generated → L4 human-endorsed; see CLAUDE.md)"))
+                           " (L0 AI-generated → L4 human-endorsed; see " see ")"))
 
                 ;; A label is encouraged so readers need not look the code up,
                 ;; but a *wrong* label is worse than none -- check it against
@@ -189,7 +194,7 @@
                   (err! (str "review_maturity is " level " but `reviewed_at` is missing"
                              " — a review is an event against a version, so a level at or above "
                              staleness-from " must record when it was reviewed"
-                             " (e.g. `reviewed_at: 2026-09-09`). See CLAUDE.md."))
+                             " (e.g. `reviewed_at: 2026-09-09`). See " see "."))
 
                   (and (parse-date r) (parse-date m)
                        (.isAfter (parse-date m) (parse-date r)))
@@ -209,7 +214,7 @@
                              " — an AI-assisted document must record its provenance ("
                              (str/join ", " (map name (sort provenance-required))) ")."
                              " If it genuinely was not captured, set it to "
-                             (pr-str provenance-unknown) ". See CLAUDE.md."))
+                             (pr-str provenance-unknown) ". See " see "."))
 
                   (provenance-unknown? provenance-unknown v)
                   (warn! (str "`" (name k) "` is " (pr-str provenance-unknown)
@@ -226,8 +231,11 @@
             (warn! "`tags` must be a YAML list in square brackets, e.g. tags: [data-model, edn-schema]"))
           (doseq [k (keys data)]
             (when-not (contains? (:known-keys schema) k)
-              (warn! (str "unknown key `" (name k) "` — check the spelling against the field list in CLAUDE.md,"
-                          " or add it to :known-keys in " schema-file)))))))
+              (warn! (str "unknown key `" (name k) "` — check the spelling"
+                          ;; Without :spec-doc the field list *is* :known-keys
+                          ;; in schema-file; do not name the same file twice.
+                          (when spec-doc (str " against the field list in " spec-doc))
+                          ", or add it to :known-keys in " schema-file)))))))
     {:path path :errors @errs :warnings @warns}))
 
 (defn validate-bundle-root

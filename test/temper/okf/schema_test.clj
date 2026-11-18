@@ -44,3 +44,8 @@
   (testing "a blank or absent entry falls back, per tool"
     (is (= "bb -m temper.okf.new-doc" (schema/command {:commands {:new-doc "  "}} :new-doc)))
     (is (= "bb -m temper.okf.maturity" (schema/command {:commands {:new-doc "bb new-doc"}} :maturity)))))
+
+(deftest spec-doc
+  (is (= "CONTRIBUTING.md" (schema/spec-doc {:spec-doc "CONTRIBUTING.md"})))
+  (is (nil? (schema/spec-doc {})))
+  (is (nil? (schema/spec-doc {:spec-doc " "})) "blank counts as unset"))

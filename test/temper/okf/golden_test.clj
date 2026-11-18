@@ -379,7 +379,37 @@
    {:id "difference/maturity-custom-command" :tool :maturity :bundle "full" :args ["--check"]
     :schema-edit #(assoc-in % [:commands :maturity] "bb maturity")
     :expect-original {:exit 1 :out-includes "FAILED — run `bb tools/gen_maturity_table.bb` and commit"}
-    :expect-library  {:exit 1 :out-includes "FAILED — run `bb maturity` and commit"}}])
+    :expect-library  {:exit 1 :out-includes "FAILED — run `bb maturity` and commit"}}
+   ;; The originals said "see CLAUDE.md", a file in their own repo. The library
+   ;; points at the schema's :spec-doc, or else at the schema file, which
+   ;; exists once the run gets this far. One case per message, all from the
+   ;; full fixture. See temper.okf.schema/spec-doc.
+   {:id "difference/validate-no-frontmatter-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "with at least `type:` (see CLAUDE.md)"}
+    :expect-library  {:exit 1 :out-includes "with at least `type:` (see docs/metadata-schema.edn)"}}
+   {:id "difference/validate-maturity-ladder-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see CLAUDE.md)"}
+    :expect-library  {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see docs/metadata-schema.edn)"}}
+   {:id "difference/validate-reviewed-at-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "(e.g. `reviewed_at: 2026-09-09`). See CLAUDE.md."}
+    :expect-library  {:exit 1 :out-includes "(e.g. `reviewed_at: 2026-09-09`). See docs/metadata-schema.edn."}}
+   {:id "difference/validate-provenance-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "set it to \"unrecorded\". See CLAUDE.md."}
+    :expect-library  {:exit 1 :out-includes "set it to \"unrecorded\". See docs/metadata-schema.edn."}}
+   {:id "difference/validate-unknown-key-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(dissoc % :spec-doc)
+    :expect-original {:exit 1 :out-includes "unknown key `autor` — check the spelling against the field list in CLAUDE.md, or add it to :known-keys in docs/metadata-schema.edn"}
+    :expect-library  {:exit 1 :out-includes "unknown key `autor` — check the spelling, or add it to :known-keys in docs/metadata-schema.edn"}}
+   ;; With :spec-doc set, the pointer names it; the unknown-key warning keeps
+   ;; the original's wording with the consumer's file in it.
+   {:id "difference/validate-custom-spec-doc" :tool :validate :bundle "full" :args []
+    :schema-edit #(assoc % :spec-doc "CONTRIBUTING.md")
+    :expect-original {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see CLAUDE.md)"}
+    :expect-library  {:exit 1 :out-includes "the field list in CONTRIBUTING.md, or add it to :known-keys"}}])
 
 ;; ---------------------------------------------------------------------------
 

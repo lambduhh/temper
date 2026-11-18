@@ -85,3 +85,10 @@
   [schema tool]
   (or (non-blank (get-in schema [:commands tool]))
       (str "bb -m temper.okf." (name tool))))
+
+(defn spec-doc
+  "Where the consumer documents the convention, for validate's \"see ...\"
+  pointers: (:spec-doc schema) when set and non-blank, else nil. Callers fall
+  back to the schema file, which always exists once the run has got this far."
+  [schema]
+  (non-blank (:spec-doc schema)))

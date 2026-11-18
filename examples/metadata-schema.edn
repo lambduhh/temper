@@ -124,4 +124,10 @@
  ;; `bb -m temper.okf.<tool>`, which works wherever temper is on the
  ;; classpath. If you wrap the tools in bb tasks, name them, e.g.
  ;;   {:new-doc "bb new-doc" :maturity "bb maturity"}
- :commands        {}}
+ :commands        {}
+
+ ;; Where your project documents this convention -- the ladder, provenance,
+ ;; reviewed_at. validate's messages say "see <this>". Optional; blank or
+ ;; absent points them at this schema file instead, which always exists.
+ ;; EDIT: e.g. "CONTRIBUTING.md".
+ :spec-doc        ""}

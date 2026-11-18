@@ -347,7 +347,13 @@ matching JSON-LD context.
 | `:okf-version` | string | validate | Every bundle root fails (`okf_version must be ""`) | — |
 | `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2** |
 | `:context-exempt` | set of keywords | validate | Uncaught exception (exit 1) when `:context-file` is set | No exemptions |
+| `:spec-doc` | path or URL | validate (the "see ..." pointer in five messages) | Messages point at the schema file in use | Blank: same as absent |
 | `:commands` | map of tool (`:new-doc`, `:maturity`) to the command that runs it here, e.g. `{:new-doc "bb new-doc"}` | new-doc (usage line), maturity (`FAILED` line) | Messages print `bb -m temper.okf.<tool>` | A missing or blank entry falls back to the same, per tool |
+
+`:spec-doc` and `:commands` are optional by design, unlike the keys whose
+absence is **exit 2**. Those keys carry rules, and an absent rule key would
+pass checks that never ran. These two only change wording in messages, and
+when absent the messages name something that exists.
 
 ## Use as a dependency
 
@@ -450,6 +456,14 @@ behaviour are encoded as expected-difference cases in
    bug would be in this library, whatever command ran it. Only a bug in
    `temper.okf.new-doc/frontmatter` can reach it, so it is tested from the API
    with a stub, not by a golden case.
+9. **Messages point at a spec that exists.** Five validate messages said "see
+   CLAUDE.md" (no frontmatter, invalid `review_maturity`, missing
+   `reviewed_at`, missing provenance, unknown key), a file in the original
+   repo. They now name the schema's [`:spec-doc`](#schema-keys) if set, or
+   else the schema file in use, which exists once the run gets that far.
+   Without `:spec-doc` the unknown-key warning reads "check the spelling, or
+   add it to :known-keys in <schema>", so it does not name the schema twice.
+   Its own commit.
 
 ## Carried-over behaviour
 
@@ -468,8 +482,6 @@ pinned by a golden case, so changing it is a visible, deliberate edit.
   the "If absent" column in [Schema keys](#schema-keys). `temper.okf.new-doc` reads
   `(or (:provenance-required schema) #{})`, the pattern the validator's
   comments warn against.
-- **Messages name the original repo's files.** Errors still say "see
-  CLAUDE.md".
 - **Internal hosts match `host[:port]` exactly**, so
   `https://intranet.example.com:8443/` is not treated as internal.
 - **A malformed `%` escape in a link target is an uncaught exception** rather
