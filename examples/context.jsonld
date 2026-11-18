@@ -2,7 +2,6 @@
   "@context": {
     "dcterms": "http://purl.org/dc/terms/",
     "prov": "http://www.w3.org/ns/prov#",
-    "schema": "http://schema.org/",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
     "temper": "https://w3id.org/temper#",
 
@@ -21,7 +20,7 @@
     "tools": { "@id": "temper:tool", "@container": "@set" },
     "agents_skills": { "@id": "temper:agentSkill", "@container": "@set" },
 
-    "review_maturity": "schema:creativeWorkStatus",
+    "review_maturity": "temper:reviewMaturity",
     "review_note": "dcterms:provenance",
     "reviewed_at": { "@id": "dcterms:dateAccepted", "@type": "xsd:dateTime" }
   }
