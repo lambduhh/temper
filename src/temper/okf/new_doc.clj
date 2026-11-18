@@ -35,8 +35,9 @@
             [temper.okf.schema :as schema]))
 
 (def ^:private tool
-  "Prefix for configuration errors on stderr; the original script's name."
-  "new_doc")
+  "Prefix for configuration errors on stderr: this namespace. The original
+  script's name, `new_doc`, named a file only its own repo had."
+  "temper.okf.new-doc")
 
 (def api-only-keys
   "Options -main drops from the command line, so `--today` stays as inert as

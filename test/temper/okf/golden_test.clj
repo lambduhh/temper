@@ -409,7 +409,27 @@
    {:id "difference/validate-custom-spec-doc" :tool :validate :bundle "full" :args []
     :schema-edit #(assoc % :spec-doc "CONTRIBUTING.md")
     :expect-original {:exit 1 :out-includes "(L0 AI-generated → L4 human-endorsed; see CLAUDE.md)"}
-    :expect-library  {:exit 1 :out-includes "the field list in CONTRIBUTING.md, or add it to :known-keys"}}])
+    :expect-library  {:exit 1 :out-includes "the field list in CONTRIBUTING.md, or add it to :known-keys"}}
+   ;; Configuration errors were prefixed with the original script's name,
+   ;; naming a file only the original repo had. The library uses its
+   ;; namespace. Every exit-2 case above compares stderr after
+   ;; g/renamed-prefix; these pin the raw prefix on each side, one per tool.
+   {:id "difference/validate-stderr-prefix" :tool :validate :bundle "clean" :args []
+    :env {"OKF_DOCS_DIR" "nope"}
+    :expect-original {:exit 2 :out "" :err-starts-with "validate_metadata: docs directory nope"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.validate: docs directory nope"}}
+   {:id "difference/links-stderr-prefix" :tool :links :bundle "clean" :args []
+    :schema-edit #(dissoc % :link-policy)
+    :expect-original {:exit 2 :out "" :err-starts-with "check_links: cannot run -- :link-policy"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.links: cannot run -- :link-policy"}}
+   {:id "difference/maturity-stderr-prefix" :tool :maturity :bundle "clean" :args []
+    :env {"OKF_MATURITY_TARGETS" "NOPE.md"}
+    :expect-original {:exit 2 :out "" :err-starts-with "gen_maturity_table: target file(s) missing"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.maturity: target file(s) missing"}}
+   {:id "difference/new-doc-stderr-prefix" :tool :new-doc :bundle "clean" :args []
+    :env {"OKF_SCHEMA" "nope.edn"}
+    :expect-original {:exit 2 :out "" :err-starts-with "new_doc: cannot read schema at nope.edn"}
+    :expect-library  {:exit 2 :out "" :err-starts-with "temper.okf.new-doc: cannot read schema at nope.edn"}}])
 
 ;; ---------------------------------------------------------------------------
 
@@ -442,7 +462,8 @@
       (when expect
         (is (str/includes? (output original) expect) "original output contains the expected text"))
       (is (= (:out original) (:out library)) "stdout")
-      (is (= (:err original) (:err library)) "stderr")
+      (is (= (g/renamed-prefix (:tool case) (:err original)) (:err library))
+          "stderr, after the one rename in g/renamed-prefix")
       (is (= (:exit original) (:exit library)) "exit code")
       (is (= (:tree original) (:tree library)) "resulting files"))))
 
@@ -457,6 +478,8 @@
           (is (= s (:out result)) (str side " stdout")))
         (when-let [s (:out-includes expected)]
           (is (str/includes? (:out result) s) (str side " stdout contains")))
+        (when-let [s (:err-starts-with expected)]
+          (is (str/starts-with? (:err result) s) (str side " stderr starts with")))
         (doseq [[path s] (:file-includes expected)]
           (is (str/includes? (str (get-in result [:files path])) s)
               (str side " " path " contains " (pr-str s))))))))

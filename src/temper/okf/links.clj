@@ -51,8 +51,9 @@
             [temper.okf.config :as config]))
 
 (def ^:private tool
-  "Prefix for configuration errors on stderr; the original script's name."
-  "check_links")
+  "Prefix for configuration errors on stderr: this namespace. The original
+  script's name, `check_links`, named a file only its own repo had."
+  "temper.okf.links")
 
 (defn- policy-error! [schema-file msgs]
   (apply config/config-error!

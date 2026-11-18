@@ -191,7 +191,7 @@ Argument parsing:
 | Stream | Content |
 |---|---|
 | stdout | The report, byte-for-byte what the original script printed, except as listed in [Differences from the original scripts](#differences-from-the-original-scripts) |
-| stderr | Configuration errors (exit 2), one message per line, prefixed with the original script's name (`validate_metadata:`, `check_links:`, `gen_maturity_table:`, `new_doc:`) |
+| stderr | Configuration errors (exit 2), one message per line, prefixed with the tool's namespace (`temper.okf.validate:`, `temper.okf.links:`, `temper.okf.maturity:`, `temper.okf.new-doc:`) |
 
 ## Configuration
 
@@ -407,8 +407,12 @@ Command equivalents for a repo that used the scripts:
 
 ## Differences from the original scripts
 
-The golden tests require identical stdout, stderr, exit code and resulting
-files for every case except those below. Differences that change command-line
+The golden tests require identical stdout, stderr (after the one prefix
+rename in [difference 10](#differences-from-the-original-scripts)), exit code
+and resulting files for every case except those below. The fixture schemas
+set `:spec-doc` and `:commands` to the original repo's values, which the
+originals ignore, so differences 7 and 9 show only in the cases that remove
+them. Differences that change command-line
 behaviour are encoded as expected-difference cases in
 [`test/temper/okf/golden_test.clj`](test/temper/okf/golden_test.clj).
 
@@ -464,6 +468,15 @@ behaviour are encoded as expected-difference cases in
    Without `:spec-doc` the unknown-key warning reads "check the spelling, or
    add it to :known-keys in <schema>", so it does not name the schema twice.
    Its own commit.
+10. **stderr prefixes name the namespace.** Configuration errors were
+    prefixed with the original script's name (`validate_metadata:`,
+    `check_links:`, `gen_maturity_table:`, `new_doc:`). They are now prefixed
+    with the namespace (`temper.okf.validate:` and so on), which is what a
+    consumer runs. Every exit-2 golden case compares stderr after renaming
+    exactly that one prefix at the start of each line
+    (`temper.okf.golden-support/renamed-prefix`); the rest must still match
+    byte-for-byte, and one difference case per tool pins both raw prefixes.
+    Its own commit, so it can be dropped independently.
 
 ## Carried-over behaviour
 

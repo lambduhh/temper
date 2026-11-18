@@ -33,8 +33,9 @@
             [temper.okf.schema :as schema]))
 
 (def ^:private tool
-  "Prefix for configuration errors on stderr; the original script's name."
-  "gen_maturity_table")
+  "Prefix for configuration errors on stderr: this namespace. The original
+  script's name, `gen_maturity_table`, named a file only its own repo had."
+  "temper.okf.maturity")
 
 (defn- split-targets [v]
   (if (sequential? v)

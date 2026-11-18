@@ -27,8 +27,9 @@
             [temper.okf.schema :as schema]))
 
 (def ^:private tool
-  "Prefix for configuration errors on stderr; the original script's name."
-  "validate_metadata")
+  "Prefix for configuration errors on stderr: this namespace. The original
+  script's name, `validate_metadata`, named a file only its own repo had."
+  "temper.okf.validate")
 
 (defn- missing-key! [schema-file k & more]
   (config/config-error!

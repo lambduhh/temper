@@ -67,7 +67,7 @@
       (is (= 3 (count (:errors (by-name "bad-dates.md")))))
       (is (= 2 (count (:warnings (by-name "provenance-unrecorded.md")))))))
   (testing "unreadable configuration is data, not an exit"
-    (is (= {:exit 2 :config-errors ["validate_metadata: docs directory /nonexistent is missing or unreadable."]}
+    (is (= {:exit 2 :config-errors ["temper.okf.validate: docs directory /nonexistent is missing or unreadable."]}
            (quietly #(validate/run {:docs-dir "/nonexistent"}))))
     (let [{:keys [docs-dir schema]} (bundle! "clean" :edit #(dissoc % :provenance-unknown))]
       (is (= 2 (:exit (quietly #(validate/run {:docs-dir docs-dir :schema schema})))))
