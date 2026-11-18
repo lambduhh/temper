@@ -53,3 +53,10 @@ temper:agentSkill
     rdfs:label "agent skill" ;
     rdfs:comment "An agent or skill definition applied while generating the document, ideally a commit-pinned URL. Frontmatter key: agents_skills (one value per list item)." ;
     rdfs:seeAlso prov:used .
+
+temper:reviewMaturity
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "review maturity" ;
+    rdfs:comment "How far a human has gone in reviewing the document, written as a level code and its label, e.g. \"L2 (Human-reviewed)\". The levels are defined by the :review-maturity ladder in each bundle's metadata schema, not here, so a bundle can define its own. It describes review trust, not a publication lifecycle stage. Frontmatter key: review_maturity." ;
+    rdfs:seeAlso <http://schema.org/creativeWorkStatus>, dcterms:dateAccepted .
