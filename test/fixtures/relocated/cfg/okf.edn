@@ -32,4 +32,13 @@
  :bundle-root     "knowledge/index.md"
  :okf-version     "0.1"
  :context-file    "knowledge/context.jsonld"
- :context-exempt  #{:okf_version}}
+ :context-exempt  #{:okf_version}
+ ;; The original repo's spec, which validate's messages named unconditionally
+ ;; (the originals ignore this key). The difference/validate-*-spec-doc cases
+ ;; remove it.
+ :spec-doc        "CLAUDE.md"
+ ;; The original scripts' own commands, which they printed unconditionally
+ ;; (the originals ignore this key). Set here so every golden case compares
+ ;; byte-for-byte; the difference/*-default-command cases remove it.
+ :commands        {:new-doc  "bb tools/new_doc.bb"
+                   :maturity "bb tools/gen_maturity_table.bb"}}
