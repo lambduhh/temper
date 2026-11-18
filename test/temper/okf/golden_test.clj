@@ -20,6 +20,12 @@
 (defn- dissoc-policy [& ks] #(apply update % :link-policy dissoc ks))
 (defn- assoc-policy [k v] #(assoc-in % [:link-policy k] v))
 
+(def ^:private original-commands
+  "What the fixture schemas set :commands to: the original scripts' own
+  commands, so cases that print the usage or FAILED line compare
+  byte-for-byte. The difference/*-command cases pin what happens without it."
+  {:new-doc "bb tools/new_doc.bb" :maturity "bb tools/gen_maturity_table.bb"})
+
 (def ^:private full-env-relocated
   {"OKF_DOCS_DIR" "knowledge" "OKF_SCHEMA" "cfg/okf.edn"})
 
@@ -305,7 +311,9 @@
    {:id "new-doc/real-copy" :bundle :real-copy
     :args (into ["--type" "Research" "--title" "Golden" "--path" "docs/roadshow/golden.md"] ai-flags)
     :exit 0}
+   ;; Exit 1 prints the usage line; the real bundle's schema has no :commands.
    {:id "new-doc/real-copy-exists" :bundle :real-copy
+    :schema-edit #(assoc % :commands original-commands)
     :args ["--type" "Reference" "--title" "G" "--path" "docs/glossary.md"] :exit 1}])
 
 ;; ---------------------------------------------------------------------------
@@ -351,7 +359,27 @@
     :capture ["docs/a.md"]
     :expect-original {:exit 1 :out-includes "error: --type is required"}
     :expect-library  {:exit 0 :out "wrote docs/a.md\n"
-                      :file-includes {"docs/a.md" "type: Guide\n"}}}])
+                      :file-includes {"docs/a.md" "type: Guide\n"}}}
+   ;; The originals named their own scripts (`bb tools/new_doc.bb`), which exist
+   ;; only in the repo they came from. Without :commands the library names the
+   ;; form that works wherever temper is on the classpath; with it, the
+   ;; consumer's own command. See temper.okf.schema/command.
+   {:id "difference/new-doc-default-command" :tool :new-doc :bundle "clean" :args []
+    :schema-edit #(dissoc % :commands)
+    :expect-original {:exit 1 :out-includes "usage: bb tools/new_doc.bb --type <Type>"}
+    :expect-library  {:exit 1 :out-includes "usage: bb -m temper.okf.new-doc --type <Type>"}}
+   {:id "difference/new-doc-custom-command" :tool :new-doc :bundle "clean" :args []
+    :schema-edit #(assoc-in % [:commands :new-doc] "bb new-doc")
+    :expect-original {:exit 1 :out-includes "usage: bb tools/new_doc.bb --type <Type>"}
+    :expect-library  {:exit 1 :out-includes "usage: bb new-doc --type <Type>"}}
+   {:id "difference/maturity-default-command" :tool :maturity :bundle "full" :args ["--check"]
+    :schema-edit #(dissoc % :commands)
+    :expect-original {:exit 1 :out-includes "FAILED — run `bb tools/gen_maturity_table.bb` and commit"}
+    :expect-library  {:exit 1 :out-includes "FAILED — run `bb -m temper.okf.maturity` and commit"}}
+   {:id "difference/maturity-custom-command" :tool :maturity :bundle "full" :args ["--check"]
+    :schema-edit #(assoc-in % [:commands :maturity] "bb maturity")
+    :expect-original {:exit 1 :out-includes "FAILED — run `bb tools/gen_maturity_table.bb` and commit"}
+    :expect-library  {:exit 1 :out-includes "FAILED — run `bb maturity` and commit"}}])
 
 ;; ---------------------------------------------------------------------------
 

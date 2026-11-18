@@ -32,4 +32,9 @@
  :bundle-root     "docs/index.md"
  :okf-version     "0.1"
  :context-file    "docs/context.jsonld"
- :context-exempt  #{:okf_version}}
+ :context-exempt  #{:okf_version}
+ ;; The original scripts' own commands, which they printed unconditionally
+ ;; (the originals ignore this key). Set here so every golden case compares
+ ;; byte-for-byte; the difference/*-default-command cases remove it.
+ :commands        {:new-doc  "bb tools/new_doc.bb"
+                   :maturity "bb tools/gen_maturity_table.bb"}}

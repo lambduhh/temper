@@ -190,7 +190,7 @@ Argument parsing:
 
 | Stream | Content |
 |---|---|
-| stdout | The report, byte-for-byte what the original script printed |
+| stdout | The report, byte-for-byte what the original script printed, except as listed in [Differences from the original scripts](#differences-from-the-original-scripts) |
 | stderr | Configuration errors (exit 2), one message per line, prefixed with the original script's name (`validate_metadata:`, `check_links:`, `gen_maturity_table:`, `new_doc:`) |
 
 ## Configuration
@@ -347,6 +347,7 @@ matching JSON-LD context.
 | `:okf-version` | string | validate | Every bundle root fails (`okf_version must be ""`) | — |
 | `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2** |
 | `:context-exempt` | set of keywords | validate | Uncaught exception (exit 1) when `:context-file` is set | No exemptions |
+| `:commands` | map of tool (`:new-doc`, `:maturity`) to the command that runs it here, e.g. `{:new-doc "bb new-doc"}` | new-doc (usage line), maturity (`FAILED` line) | Messages print `bb -m temper.okf.<tool>` | A missing or blank entry falls back to the same, per tool |
 
 ## Use as a dependency
 
@@ -434,6 +435,21 @@ behaviour are encoded as expected-difference cases in
    not start with `--`, so `--force yes`, the one form that worked before,
    parses as it did. This change is its own commit, so it can be dropped
    independently.
+7. **Messages name a command that exists.** The originals printed their own
+   paths: the new-doc usage line said `usage: bb tools/new_doc.bb ...` and
+   `maturity --check` said "FAILED — run `bb tools/gen_maturity_table.bb`".
+   Those files exist only in the repo the scripts came from. Both now print
+   the schema's [`:commands`](#schema-keys) entry for the tool if set, or
+   else `bb -m temper.okf.new-doc` / `bb -m temper.okf.maturity`, which work
+   wherever temper is on the classpath (and match `temper.okf.review`'s
+   usage line). temper cannot tell whether a consumer defined a `bb new-doc`
+   task, so the consumer says. Its own commit.
+8. **The internal-error guard names temper.** If new-doc ever generated
+   frontmatter without a closing `---`, it said "This is a bug in
+   tools/new_doc.bb". It now says "This is a bug in temper.okf.new-doc": the
+   bug would be in this library, whatever command ran it. Only a bug in
+   `temper.okf.new-doc/frontmatter` can reach it, so it is tested from the API
+   with a stub, not by a golden case.
 
 ## Carried-over behaviour
 
@@ -453,8 +469,7 @@ pinned by a golden case, so changing it is a visible, deliberate edit.
   `(or (:provenance-required schema) #{})`, the pattern the validator's
   comments warn against.
 - **Messages name the original repo's files.** Errors still say "see
-  CLAUDE.md", "This is a bug in tools/new_doc.bb", "run `bb
-  tools/gen_maturity_table.bb`", and the usage line says `bb tools/new_doc.bb`.
+  CLAUDE.md".
 - **Internal hosts match `host[:port]` exactly**, so
   `https://intranet.example.com:8443/` is not treated as internal.
 - **A malformed `%` escape in a link target is an uncaught exception** rather

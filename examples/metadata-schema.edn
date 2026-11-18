@@ -117,4 +117,11 @@
  ;; known key except those listed in :context-exempt must have a mapping there.
  ;; Set to "" to skip the check; a path that is set but missing exits 2.
  :context-file    "docs/context.jsonld"
- :context-exempt  #{:okf_version}}
+ :context-exempt  #{:okf_version}
+
+ ;; How messages name the tools: the new-doc usage line and maturity's
+ ;; "FAILED — run ..." line. Optional; a tool not listed here is named as
+ ;; `bb -m temper.okf.<tool>`, which works wherever temper is on the
+ ;; classpath. If you wrap the tools in bb tasks, name them, e.g.
+ ;;   {:new-doc "bb new-doc" :maturity "bb maturity"}
+ :commands        {}}

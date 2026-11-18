@@ -36,3 +36,11 @@
   (is (= #{"L4"} (schema/reviewed-at-levels (assoc fixture-schema :review-staleness {:from "L4"}))))
   (testing "a :from that names no level requires reviewed_at nowhere"
     (is (= #{} (schema/reviewed-at-levels (assoc fixture-schema :review-staleness {:from "L9"}))))))
+
+(deftest command
+  (is (= "bb -m temper.okf.new-doc" (schema/command {} :new-doc)))
+  (is (= "bb -m temper.okf.maturity" (schema/command nil :maturity)))
+  (is (= "bb new-doc" (schema/command {:commands {:new-doc "bb new-doc"}} :new-doc)))
+  (testing "a blank or absent entry falls back, per tool"
+    (is (= "bb -m temper.okf.new-doc" (schema/command {:commands {:new-doc "  "}} :new-doc)))
+    (is (= "bb -m temper.okf.maturity" (schema/command {:commands {:new-doc "bb new-doc"}} :maturity)))))
