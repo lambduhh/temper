@@ -112,9 +112,20 @@ A review covers one version of a doc. For each doc at or above `:review-stalenes
 bb drift --check                    # report docs that would be lowered (exit 1 if any)
 bb drift                            # lower them
 bb drift --changed-since origin/main  # only docs changed since a ref (what the PR workflow does)
+bb drift --check --base origin/main   # all docs, plus the branch rule below
 ```
 
 If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
+
+### Reviews made on a branch
+
+When drift is given a base ref (`--base REF`, or `--changed-since REF`, which names the PR base wherever it's used), it treats a doc whose reviewed version is not reachable from `REF` as **reviewed on this branch**. For those docs, **any** word change after the review lowers the doc, not only a change past the threshold. Docs reviewed before the branch keep the threshold.
+
+Why: a squash merge makes the squash commit the baseline on the base branch. That's correct only if the squashed body is the body that was reviewed. Without this rule, an edit under the threshold made after a review on the branch would be absorbed into the new baseline, and nobody would have reviewed it. With it, a branch that passes has nothing unreviewed to absorb, so the result is the same for merge, squash and rebase merges.
+
+The fix is the same as for any drift: tick **Viewed** on the new version and run `bb review`. GitHub already clears Viewed when a file changes, so this matches what the reviewer sees. The cost is that a typo fix after a review needs another tick.
+
+The rule only protects merges if a failing check blocks them. Make the drift step a required status check on the base branch.
 
 - **The measure:** (words deleted + words inserted) / words at review, capped at 100%.
 - **How it's computed:**
@@ -131,9 +142,10 @@ If at least `:review-drift :changed-fraction` of the words changed, `review_matu
   - outside a git work tree;
   - in a shallow clone, where history is needed (use `fetch-depth: 0` in CI);
   - with a schema lacking `:review-drift`;
-  - with a `:to` at or above the floor, which would lower the same doc again on every run.
+  - with a `:to` at or above the floor, which would lower the same doc again on every run;
+  - with a base ref that doesn't name a commit, or that starts with `-`. A typo must not silently switch the branch rule off.
 - **Limits:**
-  - **A squash merge makes the squash commit the baseline,** so drift made on the branch after the review is absorbed. Run drift on the branch before merging; the PR workflow does.
+  - **Pushes straight to the base branch** have no base ref, so only the threshold applies. They involve no merge, so no squash can absorb anything.
   - **Renaming a doc and rewriting most of it in one commit** looks to git like a new file (under 50% similar), so that commit becomes the baseline.
 - **Speed:** most docs take well under a second. Same words, heavily reordered, is the worst case: about 4 s per 5,000 words.
 - **On push:** [`examples/github-actions/review-drift.yml`](examples/github-actions/review-drift.yml) runs `bb drift --changed-since` the base branch on every PR push, and commits the result.

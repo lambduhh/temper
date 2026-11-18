@@ -18,12 +18,17 @@
   Ticking Viewed on the new version (temper.okf.review) raises it again, and
   its new reviewed_at becomes the next baseline.
 
-  Run it on a branch before merging: after a squash merge the squash commit is
-  the baseline, so drift made on the branch after review is absorbed.
+  With a base ref (:base, or :changed-since, which names the PR base in every
+  documented use), a doc whose reviewed version is NOT reachable from the base
+  was reviewed on this branch. For those docs any word change after the review
+  lowers it, not only a change past the threshold: the review must cover the
+  version that gets merged. That makes the check independent of the merge
+  method. A squash merge makes the squash commit the baseline, which is only
+  correct if its body is the reviewed body, and this rule guarantees that.
 
   Exit codes: 0 done (with :check, nothing to lower) · 1 (:check only) docs
-  would be lowered · 2 unreadable configuration, not a git work tree, or a
-  shallow clone."
+  would be lowered · 2 unreadable configuration, not a git work tree, a
+  shallow clone, or a base ref that does not name a commit."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [clojure.string :as str]
@@ -142,12 +147,37 @@
       (config/config-error! (str "drift: can't diff against " ref " -- " (str/trim (:err res)))))
     (set (remove str/blank? (concat (str/split-lines (:out res)) (str/split-lines (:out wt)))))))
 
+(defn- git-ok [root & args]
+  (apply p/shell {:dir (str root) :out :string :err :string :continue true} "git" args))
+
+(defn- check-base!
+  "Config error unless `ref` names a commit. A typo here must not silently
+  turn the rule off."
+  [root ref]
+  (when (or (str/blank? ref) (str/starts-with? ref "-"))
+    ;; A leading `-` would reach git as an option, not a ref.
+    (config/config-error! (str "drift: base must be a git ref, got " (pr-str ref))))
+  (when-not (zero? (:exit (git-ok root "rev-parse" "--verify" "--quiet" (str ref "^{commit}"))))
+    (config/config-error! (str "drift: base " ref " does not name a commit (fetch it, e.g. fetch-depth: 0)"))))
+
+(defn- on-base?
+  "True when commit `sha` is reachable from `ref`: the review happened before
+  this branch, not on it."
+  [root sha ref]
+  (let [{:keys [exit err]} (git-ok root "merge-base" "--is-ancestor" sha ref)]
+    (case (int exit)
+      0 true
+      1 false
+      (config/config-error! (str "drift: can't compare " sha " with " ref " -- " (str/trim err))))))
+
 (defn- pct [x] (str (Math/round (* 100.0 (double x))) "%"))
 
 (defn run
   "Options: :root (default \".\"), :docs-dir, :schema, :check, :changed-since
-  (a git ref: only docs changed since it are considered), :today.
-  Returns {:exit :lowered [{:path :fraction :at-least? :sha}] :checked [...]
+  (a git ref: only docs changed since it are considered; also the default
+  :base), :base (a git ref: a doc reviewed on the branch since it is lowered
+  by any word change after its review), :today.
+  Returns {:exit :lowered [{:path :fraction :at-least? :sha :on-branch?}] :checked [...]
   :no-baseline [...] :pending [...]} and rewrites lowered docs unless :check."
   [opts]
   (config/catch-config-errors
@@ -158,6 +188,8 @@
            floor (or (schema/rank sch (get-in sch [:review-staleness :from] "L2")) 2)
            {:keys [threshold to]} (load-drift-config! sch schema-file floor)
            _     (when-let [problem (history/check-repo! root)] (config/config-error! (str "drift: " problem)))
+           base  (or (:base opts) (:changed-since opts))
+           _     (when base (check-base! root base))
            only  (some->> (:changed-since opts) (changed-paths root))
            today (or (:today opts) (str (java.time.LocalDate/now)))
            docs  (->> (fs/glob (fs/path root docs-dir) "**.md")
@@ -174,27 +206,38 @@
                             :pending (update acc :pending conj {:path path})
                             :none    (update acc :no-baseline conj {:path path})
                             :ok (let [res (drift (fm/body b) (fm/body content) threshold)
-                                      entry (assoc res :path path :sha (subs sha 0 7))]
-                                  (if (lowered? res threshold)
+                                      on-branch? (boolean (and base (not (on-base? root sha base))))
+                                      entry (assoc res :path path :sha (subs sha 0 7) :on-branch? on-branch?)]
+                                  (if (if on-branch?
+                                        (or (:at-least? res) (pos? (:fraction res)))
+                                        (lowered? res threshold))
                                     (update acc :lowered conj entry)
                                     (update acc :checked conj entry))))))))
                   {:lowered [] :checked [] :no-baseline [] :pending []}
                   docs)]
        (when-not (:check opts)
-         (doseq [{:keys [path fraction sha at-least?]} (:lowered acc)
+         (doseq [{:keys [path fraction sha at-least? on-branch?]} (:lowered acc)
                  :let [f (str (fs/path root path))
-                       note (str "Lowered to " to ": " (when at-least? "at least ") (pct fraction)
-                                 " of words changed since the review at " sha
-                                 " (threshold " (pct threshold) ").")]]
+                       note (if on-branch?
+                              (str "Lowered to " to ": changed after its review at " sha " on this branch ("
+                                   (when at-least? "at least ") (pct fraction)
+                                   " of words). A review made on a branch must cover the version that is merged.")
+                              (str "Lowered to " to ": " (when at-least? "at least ") (pct fraction)
+                                   " of words changed since the review at " sha
+                                   " (threshold " (pct threshold) ")."))]]
            (spit f (fm/set-keys (slurp f) [["review_maturity" (schema/canonical-maturity sch to)]
                                            ["review_note" (fm/yaml-str note)]]))))
        (assoc acc :exit (if (and (:check opts) (seq (:lowered acc))) 1 0)
                   :check (:check opts) :threshold threshold :to to :today today)))))
 
 (defn report [{:keys [lowered checked no-baseline pending check threshold to]}]
-  (str (str/join (for [{:keys [path fraction sha at-least?]} lowered]
-                   (str (if check "would lower " "lowered ") path " to " to ": " (when at-least? "at least ") (pct fraction)
-                        " of words changed since " sha "\n")))
+  (str (str/join (for [{:keys [path fraction sha at-least? on-branch?]} lowered]
+                   (str (if check "would lower " "lowered ") path " to " to ": "
+                        (if on-branch?
+                          (str "changed after its review on this branch (" (when at-least? "at least ") (pct fraction)
+                               " of words since " sha "); re-review it")
+                          (str (when at-least? "at least ") (pct fraction) " of words changed since " sha))
+                        "\n")))
        (str/join (for [{:keys [path fraction]} checked] (str "ok " path " (" (pct fraction) " changed)\n")))
        (str/join (for [{:keys [path]} no-baseline] (str "skip (no commit has its reviewed_at yet): " path "\n")))
        (str/join (for [{:keys [path]} pending] (str "skip (reviewed_at changed but not committed): " path "\n")))
@@ -202,7 +245,7 @@
          (str (count lowered) " doc(s) " (if check "would be " "") "lowered (threshold " (pct threshold) ")\n"))))
 
 (defn -main [& args]
-  (let [opts (cli/parse-flags args {:value (merge cli/path-flags {"--changed-since" :changed-since})
+  (let [opts (cli/parse-flags args {:value (merge cli/path-flags {"--changed-since" :changed-since "--base" :base})
                                     :bool {"--check" :check}})
         res  (run opts)]
     (cli/exit! res (report res))))
