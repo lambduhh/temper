@@ -46,11 +46,20 @@
 (defn bump
   "Content with review_maturity (when :target is given), reviewed_at and
   review_note set. Only the frontmatter is edited; key order is kept and
-  missing keys are appended."
-  [schema content {:keys [target reviewed-at note]}]
+  missing keys are appended.
+
+  When the schema targets OKF 0.2 and :viewer (a GitHub login) is given, also
+  sets `verified` to one { by, at } mapping: by is human:<login>, at is the
+  same instant as reviewed_at. Only the latest review is kept; earlier ones
+  are in git history. The actor is quoted, because `human:x` in a YAML 1.1
+  flow mapping is a parsing risk."
+  [schema content {:keys [target reviewed-at note viewer]}]
   (fm/set-keys content (cond-> []
                          target (conj ["review_maturity" (schema/canonical-maturity schema target)])
-                         true   (conj ["reviewed_at" reviewed-at] ["review_note" (fm/yaml-str note)]))))
+                         true   (conj ["reviewed_at" reviewed-at] ["review_note" (fm/yaml-str note)])
+                         (and viewer (schema/okf-v02? schema))
+                         (conj ["verified" (str "{ by: " (fm/yaml-str (str "human:" viewer))
+                                                ", at: " reviewed-at " }")]))))
 
 (defn- changed-since-review?
   "True when the doc's body differs from the version its reviewed_at points
@@ -191,9 +200,9 @@
          (do
            (when-not (:dry-run opts)
              (doseq [path bumped :let [f (str (fs/path root path))]]
-               (spit f (bump sch (slurp f) {:target target :reviewed-at now :note note})))
+               (spit f (bump sch (slurp f) {:target target :reviewed-at now :note note :viewer viewer})))
              (doseq [path refreshed :let [f (str (fs/path root path))]]
-               (spit f (bump sch (slurp f) {:reviewed-at now :note note}))))
+               (spit f (bump sch (slurp f) {:reviewed-at now :note note :viewer viewer}))))
            (try
              (when (and (:commit opts) (seq changed) (not (:dry-run opts)))
                (apply git! root "add" "--" changed)

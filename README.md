@@ -122,9 +122,11 @@ The fit isn't exact everywhere:
   [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01)
   (`:okf-version "0.2"`), and `temper.okf.validate` checks the shape of its
   families (`generated`, `verified`, `sources`, `usage_window`, `status`,
-  `stale_after`) whenever they are present (difference 8). No tool writes them
-  yet, so a v0.2 consumer that derives trust tiers from `verified` still
-  treats a temper document as unverified, even one at L4.
+  `stale_after`) whenever they are present (difference 8). In a 0.2 bundle,
+  `bb review` writes `verified` and `bb drift` removes it when it lowers a
+  doc, so a v0.2 consumer's trust tier follows temper's ladder from the next
+  review on. Docs reviewed before the bundle moved to 0.2 have no `verified`
+  until they are reviewed again.
 - **`reviewed_at` is typed `xsd:date`** in
   [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
   writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
@@ -169,6 +171,7 @@ For each Markdown file under the docs dir that **you** marked Viewed:
 
 - **`reviewed_at` is a UTC timestamp** (`2026-11-11T23:41:05Z`), so every review changes it, even a second one on the same day. Drift finds the reviewed version by that change. The validator reads the date part.
 - **`review_note`:** `"Viewed by <login> in PR #<n> on <date>."`
+- **`verified`** (only when the schema's `:okf-version` is 0.2 or later): `{ by: "human:<login>", at: <reviewed_at> }`, the [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#52-trust-generated-and-verified) record of the review. Only the latest review is kept; earlier ones are in git history.
 - **It never lowers a level.** A file changed on GitHub after you viewed it shows as *dismissed*, not viewed, so only the version you saw counts.
 - **`--commit` checks first, and writes nothing if any check fails:**
   - the current branch and `HEAD` are the PR's head branch and commit as GitHub shows them;
@@ -192,7 +195,7 @@ bb drift                            # lower them
 bb drift --changed-since origin/main  # only docs changed since a ref (what the PR workflow does)
 ```
 
-If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. Ticking **Viewed** again, then running `bb review`, raises it back.
+If at least `:review-drift :changed-fraction` of the words changed, `review_maturity` becomes `:review-drift :to` (e.g. `L1 (Human-directed)`), and `review_note` records the share and the baseline commit. In a bundle targeting OKF 0.2, `verified` is removed too: v0.2 consumers derive the trust tier from it alone, and the review it records no longer covers the current version. Ticking **Viewed** again, then running `bb review`, raises it back.
 
 - **The measure:** (words deleted + words inserted) / words at review, capped at 100%.
 - **How it's computed:**

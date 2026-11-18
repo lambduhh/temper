@@ -186,8 +186,12 @@
                        note (str "Lowered to " to ": " (when at-least? "at least ") (pct fraction)
                                  " of words changed since the review at " sha
                                  " (threshold " (pct threshold) ").")]]
-           (spit f (fm/set-keys (slurp f) [["review_maturity" (schema/canonical-maturity sch to)]
-                                           ["review_note" (fm/yaml-str note)]]))))
+           ;; Under OKF 0.2, `verified` alone decides the trust tier a consumer
+           ;; sees (§5.3). The review it records no longer covers this version,
+           ;; so it goes; review_note and git history keep what happened.
+           (spit f (cond-> (fm/set-keys (slurp f) [["review_maturity" (schema/canonical-maturity sch to)]
+                                                   ["review_note" (fm/yaml-str note)]])
+                     (schema/okf-v02? sch) (fm/remove-keys ["verified"])))))
        (assoc acc :exit (if (and (:check opts) (seq (:lowered acc))) 1 0)
                   :check (:check opts) :threshold threshold :to to :today today)))))
 

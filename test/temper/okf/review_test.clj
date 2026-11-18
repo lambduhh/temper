@@ -3,6 +3,8 @@
             [babashka.process :as p]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [clj-yaml.core]
+            [temper.okf.validate]
             [temper.okf.review :as r]))
 
 (def schema
@@ -139,3 +141,21 @@
                       :fetch (fn [_] (assoc ((fetch-for dir "docs/a.md") nil) :cross-repo? true))})]
       (is (= 1 (:exit res)))
       (is (str/includes? (:error res) "fork")))))
+
+(deftest bump-writes-verified-under-okf-0-2
+  (let [v02 (assoc schema :okf-version "0.2")
+        opts {:target "L2" :reviewed-at "2026-11-11T10:00:00Z" :note "n" :viewer "lambduhh"}]
+    (testing "0.2: verified is the latest review, as one { by, at } mapping"
+      (let [out (r/bump v02 doc opts)]
+        (is (str/includes? out "verified: { by: \"human:lambduhh\", at: 2026-11-11T10:00:00Z }\n"))
+        (testing "a re-review replaces it rather than appending"
+          (let [again (r/bump v02 out (assoc opts :reviewed-at "2026-11-12T08:00:00Z"))]
+            (is (= 1 (count (re-seq #"(?m)^verified:" again))))
+            (is (str/includes? again "at: 2026-11-12T08:00:00Z }"))))
+        (testing "and it passes the v0.2 shape check"
+          (is (= [] (temper.okf.validate/validate-okf-v02
+                     (temper.okf.validate/extract-frontmatter out)
+                     (clj-yaml.core/parse-string (temper.okf.validate/extract-frontmatter out))))))))
+    (testing "0.1, or no viewer: no verified"
+      (is (not (str/includes? (r/bump schema doc opts) "verified:")))
+      (is (not (str/includes? (r/bump v02 doc (dissoc opts :viewer)) "verified:"))))))
