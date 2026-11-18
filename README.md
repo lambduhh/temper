@@ -433,7 +433,7 @@ matching JSON-LD context.
 | `:reserved-files` | set of file names | validate | `index.md`, `log.md` validated as concept documents | Same |
 | `:bundle-root` | path | validate | No bundle-root check | — |
 | `:okf-version` | string | validate | Every bundle root fails (`okf_version must be ""`) | — |
-| `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2** |
+| `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2**. When set, each `:date-keys` value must also be written as the `@type` the context gives it (difference 7) |
 | `:context-exempt` | set of keywords | validate | Uncaught exception (exit 1) when `:context-file` is set | No exemptions |
 
 ## Use as a dependency
@@ -522,6 +522,14 @@ behaviour are encoded as expected-difference cases in
    not start with `--`, so `--force yes`, the one form that worked before,
    parses as it did. This change is its own commit, so it can be dropped
    independently.
+7. **Date values must match their JSON-LD type.** When the context coerces a
+   `:date-keys` key to `xsd:date` or `xsd:dateTime`, a value written the other
+   way (a timestamp under `xsd:date`, or a date under `xsd:dateTime`) is a
+   warning, because it would lift to RDF as an ill-typed literal. The
+   prefix is expanded from the context itself, so a context without an `xsd`
+   prefix coerces to nothing and is not checked. The example context now
+   types `reviewed_at` as `xsd:dateTime`, which is what `temper.okf.review`
+   writes. Warnings only; the exit code is unchanged.
 
 ## Carried-over behaviour
 

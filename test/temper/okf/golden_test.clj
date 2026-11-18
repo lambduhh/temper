@@ -346,6 +346,13 @@
                       :file-includes {"docs/a.md" "title: A clean document"}}
     :expect-library  {:exit 0 :out "wrote docs/a.md\n"
                       :file-includes {"docs/a.md" "title: T\n"}}}
+   ;; The library checks each date value against the @type the JSON-LD
+   ;; context gives its key; the original only checked the leading date. A
+   ;; timestamp under xsd:date would lift to RDF as an ill-typed literal.
+   {:id "difference/validate-date-type-mismatch" :tool :validate :bundle "clean" :args []
+    :write {"docs/ts.md" "---\ntype: Guide\nreview_maturity: L2 (Human-reviewed)\nreviewed_at: 2026-11-11T23:41:05Z\n---\n\n# ts\n"}
+    :expect-original {:exit 0 :out-includes "· 0 warnings ·"}
+    :expect-library  {:exit 0 :out-includes "ill-typed literal"}}
    {:id "difference/new-doc-force-before-flag" :tool :new-doc :bundle "clean"
     :args ["--force" "--type" "Guide" "--title" "T" "--path" "docs/a.md"]
     :capture ["docs/a.md"]
