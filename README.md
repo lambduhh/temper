@@ -127,10 +127,6 @@ The fit isn't exact everywhere:
   and v0.2 consumers must not reject a concept for a missing optional
   family. temper doesn't write `verified`, though, so a v0.2 consumer that derives trust tiers from
   `verified` treats every temper document as unverified, even one at L4.
-- **`reviewed_at` is typed `xsd:date`** in
-  [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
-  writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
-  produce an ill-typed literal.
 
 ## Namespaces
 
