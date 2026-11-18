@@ -302,8 +302,11 @@ matching JSON-LD context.
 
 ## Use as a dependency
 
-The GitHub repository named below does not exist yet; replace `<sha>` with a
-full 40-character commit SHA once it does.
+Replace `<sha>` with a full 40-character commit SHA from
+[`main`](https://github.com/lambduhh/temper/commits/main), for example the
+output of `git ls-remote https://github.com/lambduhh/temper HEAD`. No
+release tags are published yet, so pin by SHA. To upgrade, bump the SHA and
+re-run your checks.
 
 `bb.edn` in a consuming project:
 
@@ -313,7 +316,8 @@ full 40-character commit SHA once it does.
  {validate {:requires ([temper.okf.validate]) :task (apply temper.okf.validate/-main *command-line-args*)}
   links    {:requires ([temper.okf.links])    :task (apply temper.okf.links/-main *command-line-args*)}
   maturity {:requires ([temper.okf.maturity]) :task (apply temper.okf.maturity/-main *command-line-args*)}
-  new-doc  {:requires ([temper.okf.new-doc])  :task (apply temper.okf.new-doc/-main *command-line-args*)}}}
+  new-doc  {:requires ([temper.okf.new-doc])  :task (apply temper.okf.new-doc/-main *command-line-args*)}
+  review   {:requires ([temper.okf.review])   :task (apply temper.okf.review/-main *command-line-args*)}}}
 ```
 
 `bb -m temper.okf.validate` works in that project without the tasks.
