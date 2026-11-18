@@ -66,6 +66,37 @@
       (is (= 2 (count (:context-gaps r))))
       (is (= 3 (count (:errors (by-name "bad-dates.md")))))
       (is (= 2 (count (:warnings (by-name "provenance-unrecorded.md")))))))
+  (testing "date values are checked against the @type the JSON-LD context declares"
+    (let [{:keys [docs-dir schema dir]} (bundle! "clean")
+          ctx-file (str docs-dir "/context.jsonld")
+          doc! (fn [n fm] (spit (str docs-dir "/" n) (str "---\ntype: Guide\n" fm "---\n\n# x\n")))
+          warnings (fn [n] (->> (quietly #(validate/run {:docs-dir docs-dir :schema schema}))
+                                :results (filter #(= (str docs-dir "/" n) (:path %)))
+                                first :warnings))]
+      (doc! "ts.md" "review_maturity: L2 (Human-reviewed)\nreviewed_at: 2026-11-11T23:41:05Z\n")
+      (doc! "mod.md" "modified: 2026-10-01T10:00:00Z\n")
+      (doc! "ok.md" "created: 2026-10-01\n")
+      (is (= 1 (count (warnings "ts.md"))))
+      (is (str/includes? (first (warnings "ts.md")) "change its @type to xsd:dateTime"))
+      (is (str/includes? (first (warnings "mod.md")) "write it as a date, or change its @type"))
+      (is (empty? (warnings "ok.md")))
+      (testing "with reviewed_at retyped to xsd:dateTime, a date is the mismatch"
+        (spit ctx-file (str/replace (slurp ctx-file)
+                                    #"(\"reviewed_at\": \{[^}]*)xsd:date\""
+                                    "$1xsd:dateTime\""))
+        (doc! "d.md" "review_maturity: L2 (Human-reviewed)\nreviewed_at: 2026-09-01\n")
+        (is (empty? (warnings "ts.md")))
+        (is (str/includes? (first (warnings "d.md")) "don't hand-edit reviewed_at"))))
+    (testing "prefixes are expanded from the context itself"
+      (is (= {:a :date :b :datetime}
+             (validate/context-date-types
+              {"xsd" "http://www.w3.org/2001/XMLSchema#"
+               "a" {"@type" "xsd:date"}
+               "b" {"@type" "http://www.w3.org/2001/XMLSchema#dateTime"}
+               "c" {"@type" "@id"}
+               "d" "dcterms:x"})))
+      (is (= {} (validate/context-date-types {"a" {"@type" "xsd:date"}}))
+          "without an xsd prefix, xsd:date is an absolute IRI, not the XSD type")))
   (testing "unreadable configuration is data, not an exit"
     (is (= {:exit 2 :config-errors ["validate_metadata: docs directory /nonexistent is missing or unreadable."]}
            (quietly #(validate/run {:docs-dir "/nonexistent"}))))
