@@ -36,8 +36,9 @@
             [temper.okf.schema :as schema]))
 
 (def ^:private tool
-  "Prefix for configuration errors on stderr; the original script's name."
-  "new_doc")
+  "Prefix for configuration errors on stderr: this namespace. The original
+  script's name, `new_doc`, named a file only its own repo had."
+  "temper.okf.new-doc")
 
 (def api-only-keys
   "Options -main drops from the command line, so `--today` stays as inert as
@@ -158,7 +159,7 @@
     (usage-error!
      (str "refusing to write " path
           ": generated frontmatter is not delimited by a closing `---`."
-          " This is a bug in tools/new_doc.bb, not in your arguments."))))
+          " This is a bug in temper.okf.new-doc, not in your arguments."))))
 
 (defn- blank-opt?
   "True when an option is absent or blank. A string is tested as the original
@@ -186,15 +187,17 @@
     :now                    timestamp for `generated.at` (default: now, UTC, to the second)
 
   Returns
-    {:exit 0 :path p :text written-text :warnings [..] :docs-dir d}   on success,
-    {:exit 1 :error msg :warnings [..] :docs-dir d}                   on a usage error,
-    {:exit 2 :config-errors [line ...]}                               if the schema is unreadable.
-  :warnings holds messages emitted before the run ended (an unknown :type)."
+    {:exit 0 :path p :text written-text :warnings [..] :docs-dir d :command c}   on success,
+    {:exit 1 :error msg :warnings [..] :docs-dir d :command c}                   on a usage error,
+    {:exit 2 :config-errors [line ...]}                                          if the schema is unreadable.
+  :warnings holds messages emitted before the run ended (an unknown :type).
+  :command is how the usage line names this tool (temper.okf.schema/command)."
   [opts]
   (config/catch-config-errors
    (fn []
      (let [{:keys [docs-dir schema-file]} (config/resolve-paths opts)
            schema   (config/read-schema! tool schema-file)
+           command  (schema/command schema :new-doc)
            warnings (atom [])
            {:keys [type title path description tags force
                    ai-assisted session tools agents-skills source generated-by]} opts
@@ -258,24 +261,25 @@
                                                                           java.time.temporal.ChronoUnit/SECONDS)))})]
              (assert-valid-frontmatter! text path)
              (spit f text)
-             {:exit 0 :path path :text text :warnings @warnings :docs-dir docs-dir}))
+             {:exit 0 :path path :text text :warnings @warnings :docs-dir docs-dir
+              :command command}))
          (catch clojure.lang.ExceptionInfo e
            (if-let [msg (::usage-error (ex-data e))]
-             {:exit 1 :error msg :warnings @warnings :docs-dir docs-dir}
+             {:exit 1 :error msg :warnings @warnings :docs-dir docs-dir :command command}
              (throw e))))))))
 
 (defn report
   "The text the original script printed to stdout for `result`: any warnings,
   then either `wrote <path>` or the error and usage. Empty for a
   configuration error, whose lines go to stderr instead."
-  [{:keys [exit warnings error path docs-dir]}]
+  [{:keys [exit warnings error path docs-dir command]}]
   (if (= 2 exit)
     ""
     (with-out-str
       (doseq [w warnings] (println (str "warn: " w)))
       (if error
         (do (println (str "error: " error))
-            (println (str "usage: bb tools/new_doc.bb --type <Type> --title <Title> --path <" docs-dir "/...md>"))
+            (println (str "usage: " command " --type <Type> --title <Title> --path <" docs-dir "/...md>"))
             (println "       [--description <desc>] [--tags a,b,c] [--source url,url] [--force]")
             (println "       [--ai-assisted <model via interface>] [--session <id>] [--tools a,b,c] [--agents-skills url,url]"))
         (println (str "wrote " path))))))

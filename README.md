@@ -122,15 +122,12 @@ The fit isn't exact everywhere:
   [v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/62432a095456147ee71e70ac6e4dc0d2dea3ac30/okf/SPEC.md#13-changes-from-v01)
   (`:okf-version "0.2"`), and `temper.okf.validate` checks the shape of its
   families (`generated`, `verified`, `sources`, `usage_window`, `status`,
-  `stale_after`) whenever they are present (difference 8). In a 0.2 bundle,
+  `stale_after`) whenever they are present (difference 12). In a 0.2 bundle,
   `bb new-doc --generated-by` writes `generated`, `bb review` writes
   `verified`, and `bb drift` removes `verified` when it lowers a doc, so a
-  v0.2 consumer's trust tier follows temper's ladder from the next review on. Docs reviewed before the bundle moved to 0.2 have no `verified`
-  until they are reviewed again.
-- **`reviewed_at` is typed `xsd:date`** in
-  [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
-  writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
-  produce an ill-typed literal.
+  v0.2 consumer's trust tier follows temper's ladder from the next review on.
+  Docs reviewed before the bundle moved to 0.2 have no `verified` until
+  they are reviewed again.
 
 ## Namespaces
 
@@ -284,8 +281,8 @@ Argument parsing:
 
 | Stream | Content |
 |---|---|
-| stdout | The report, byte-for-byte what the original script printed |
-| stderr | Configuration errors (exit 2), one message per line, prefixed with the original script's name (`validate_metadata:`, `check_links:`, `gen_maturity_table:`, `new_doc:`) |
+| stdout | The report, byte-for-byte what the original script printed, except as listed in [Differences from the original scripts](#differences-from-the-original-scripts) |
+| stderr | Configuration errors (exit 2), one message per line, prefixed with the tool's namespace (`temper.okf.validate:`, `temper.okf.links:`, `temper.okf.maturity:`, `temper.okf.new-doc:`) |
 
 ## Configuration
 
@@ -445,8 +442,15 @@ RDFS reasoner infer that each document is an activity.
 | `:reserved-files` | set of file names | validate | `index.md`, `log.md` validated as concept documents | Same |
 | `:bundle-root` | path | validate | No bundle-root check | — |
 | `:okf-version` | string | validate | Every bundle root fails (`okf_version must be ""`) | — |
-| `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2**. When set, each `:date-keys` value must also be written as the `@type` the context gives it (difference 7) |
+| `:context-file` | path or `""` | validate | **exit 2** | `""` or blank: JSON-LD check skipped. Set but not a readable file: **exit 2**. When set, each `:date-keys` value must also be written as the `@type` the context gives it (difference 11) |
 | `:context-exempt` | set of keywords | validate | Uncaught exception (exit 1) when `:context-file` is set | No exemptions |
+| `:spec-doc` | path or URL | validate (the "see ..." pointer in five messages) | Messages point at the schema file in use | Blank: same as absent |
+| `:commands` | map of tool (`:new-doc`, `:maturity`) to the command that runs it here, e.g. `{:new-doc "bb new-doc"}` | new-doc (usage line), maturity (`FAILED` line) | Messages print `bb -m temper.okf.<tool>` | A missing or blank entry falls back to the same, per tool |
+
+`:spec-doc` and `:commands` are optional by design, unlike the keys whose
+absence is **exit 2**. Those keys carry rules, and an absent rule key would
+pass checks that never ran. These two only change wording in messages, and
+when absent the messages name something that exists.
 
 ## Use as a dependency
 
@@ -500,8 +504,12 @@ Command equivalents for a repo that used the scripts:
 
 ## Differences from the original scripts
 
-The golden tests require identical stdout, stderr, exit code and resulting
-files for every case except those below. Differences that change command-line
+The golden tests require identical stdout, stderr (after the one prefix
+rename in [difference 10](#differences-from-the-original-scripts)), exit code
+and resulting files for every case except those below. The fixture schemas
+set `:spec-doc` and `:commands` to the original repo's values, which the
+originals ignore, so differences 7 and 9 show only in the cases that remove
+them. Differences that change command-line
 behaviour are encoded as expected-difference cases in
 [`test/temper/okf/golden_test.clj`](test/temper/okf/golden_test.clj).
 
@@ -534,22 +542,54 @@ behaviour are encoded as expected-difference cases in
    not start with `--`, so `--force yes`, the one form that worked before,
    parses as it did. This change is its own commit, so it can be dropped
    independently.
-7. **Date values must match their JSON-LD type.** When the context coerces a
-   `:date-keys` key to `xsd:date` or `xsd:dateTime`, a value written the other
-   way (a timestamp under `xsd:date`, or a date under `xsd:dateTime`) is a
-   warning, because it would lift to RDF as an ill-typed literal. The
-   prefix is expanded from the context itself, so a context without an `xsd`
-   prefix coerces to nothing and is not checked. The example context now
-   types `reviewed_at` as `xsd:dateTime`, which is what `temper.okf.review`
-   writes. Warnings only; the exit code is unchanged.
-8. **OKF v0.2 families are checked.** When a document carries `generated`,
-   `verified`, `sources`, `usage_window`, `status` or `stale_after`, a
-   malformed value is an error: a missing or non-actor `by`, a timestamp
-   without a time or UTC offset, a `sources` entry with no `resource`, a
-   `status` other than draft, stable or deprecated. A missing family is never
-   an error, since OKF forbids rejecting a document for one. Timestamps are
-   checked against the written text, because the YAML parser turns dates and
-   offset-less datetimes into the same `java.util.Date`.
+7. **Messages name a command that exists.** The originals printed their own
+   paths: the new-doc usage line said `usage: bb tools/new_doc.bb ...` and
+   `maturity --check` said "FAILED — run `bb tools/gen_maturity_table.bb`".
+   Those files exist only in the repo the scripts came from. Both now print
+   the schema's [`:commands`](#schema-keys) entry for the tool if set, or
+   else `bb -m temper.okf.new-doc` / `bb -m temper.okf.maturity`, which work
+   wherever temper is on the classpath (and match `temper.okf.review`'s
+   usage line). temper cannot tell whether a consumer defined a `bb new-doc`
+   task, so the consumer says. Its own commit.
+8. **The internal-error guard names temper.** If new-doc ever generated
+   frontmatter without a closing `---`, it said "This is a bug in
+   tools/new_doc.bb". It now says "This is a bug in temper.okf.new-doc": the
+   bug would be in this library, whatever command ran it. Only a bug in
+   `temper.okf.new-doc/frontmatter` can reach it, so it is tested from the API
+   with a stub, not by a golden case.
+9. **Messages point at a spec that exists.** Five validate messages said "see
+   CLAUDE.md" (no frontmatter, invalid `review_maturity`, missing
+   `reviewed_at`, missing provenance, unknown key), a file in the original
+   repo. They now name the schema's [`:spec-doc`](#schema-keys) if set, or
+   else the schema file in use, which exists once the run gets that far.
+   Without `:spec-doc` the unknown-key warning reads "check the spelling, or
+   add it to :known-keys in <schema>", so it does not name the schema twice.
+   Its own commit.
+10. **stderr prefixes name the namespace.** Configuration errors were
+    prefixed with the original script's name (`validate_metadata:`,
+    `check_links:`, `gen_maturity_table:`, `new_doc:`). They are now prefixed
+    with the namespace (`temper.okf.validate:` and so on), which is what a
+    consumer runs. Every exit-2 golden case compares stderr after renaming
+    exactly that one prefix at the start of each line
+    (`temper.okf.golden-support/renamed-prefix`); the rest must still match
+    byte-for-byte, and one difference case per tool pins both raw prefixes.
+    Its own commit, so it can be dropped independently.
+11. **Date values must match their JSON-LD type.** When the context coerces a
+    `:date-keys` key to `xsd:date` or `xsd:dateTime`, a value written the other
+    way (a timestamp under `xsd:date`, or a date under `xsd:dateTime`) is a
+    warning, because it would lift to RDF as an ill-typed literal. The
+    prefix is expanded from the context itself, so a context without an `xsd`
+    prefix coerces to nothing and is not checked. The example context now
+    types `reviewed_at` as `xsd:dateTime`, which is what `temper.okf.review`
+    writes. Warnings only; the exit code is unchanged.
+12. **OKF v0.2 families are checked.** When a document carries `generated`,
+    `verified`, `sources`, `usage_window`, `status` or `stale_after`, a
+    malformed value is an error: a missing or non-actor `by`, a timestamp
+    without a time or UTC offset, a `sources` entry with no `resource`, a
+    `status` other than draft, stable or deprecated. A missing family is never
+    an error, since OKF forbids rejecting a document for one. Timestamps are
+    checked against the written text, because the YAML parser turns dates and
+    offset-less datetimes into the same `java.util.Date`.
 
 ## Carried-over behaviour
 
@@ -568,9 +608,6 @@ pinned by a golden case, so changing it is a visible, deliberate edit.
   the "If absent" column in [Schema keys](#schema-keys). `temper.okf.new-doc` reads
   `(or (:provenance-required schema) #{})`, the pattern the validator's
   comments warn against.
-- **Messages name the original repo's files.** Errors still say "see
-  CLAUDE.md", "This is a bug in tools/new_doc.bb", "run `bb
-  tools/gen_maturity_table.bb`", and the usage line says `bb tools/new_doc.bb`.
 - **Internal hosts match `host[:port]` exactly**, so
   `https://intranet.example.com:8443/` is not treated as internal.
 - **A malformed `%` escape in a link target is an uncaught exception** rather

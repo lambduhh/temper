@@ -57,5 +57,5 @@
       "the option wins over the env var")
   (is (= ["bb.edn" "deps.edn"] (maturity/resolve-targets {:targets [" bb.edn" "" "deps.edn"]} "docs" {}))
       "a collection is trimmed and filtered like the comma-separated form")
-  (is (= {:exit 2 :config-errors ["gen_maturity_table: target file(s) missing or unreadable: NOPE.md"]}
+  (is (= {:exit 2 :config-errors ["temper.okf.maturity: target file(s) missing or unreadable: NOPE.md"]}
          (config/catch-config-errors #(maturity/resolve-targets {:targets "deps.edn,NOPE.md"} "docs" {})))))
