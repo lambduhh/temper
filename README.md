@@ -100,7 +100,7 @@ no translation step. The tools hold it there:
 | Concern | OKF says | RDF reading | How temper enforces it |
 |---|---|---|---|
 | `type` | The one required key | `dcterms:type` | `temper.okf.validate` errors when it is missing or blank |
-| Key names | Producers may add any keys | Each key maps to a `dcterms:` or `prov:` IRI | `temper.okf.validate` exits 1 when a key in `:known-keys` has no mapping in the JSON-LD `@context` at `:context-file`, unless the key is in `:context-exempt` or `:context-file` is `""` |
+| Key names | Producers may add any keys | Each key maps to a `dcterms:`, `prov:` or [`temper:`](vocab/temper.ttl) IRI | `temper.okf.validate` exits 1 when a key in `:known-keys` has no mapping in the JSON-LD `@context` at `:context-file`, unless the key is in `:context-exempt` or `:context-file` is `""` |
 | Unknown keys and `type` values | Consumers must not reject them | Open world: an unmapped key is simply not lifted | Warnings, never errors |
 | Bundle root | `index.md` frontmatter may hold only `okf_version` | `okf_version` needs no mapping (`:context-exempt`) | `temper.okf.validate` checks the bundle root separately |
 | Where the mapping lives | Plain YAML frontmatter, "no required tooling" | The `@context` is [out-of-band](examples/context.jsonld) | Convention only: no tool checks that a document omits `@context` |
@@ -131,12 +131,6 @@ The fit isn't exact everywhere:
   [`examples/context.jsonld`](examples/context.jsonld), but `temper.okf.review`
   writes a UTC timestamp (`2026-11-11T23:41:05Z`). A JSON-LD processor would
   produce an ill-typed literal.
-- **Some PROV-O terms sit on the document rather than on an activity.**
-  `tools` and `agents_skills` map to `prov:used`, whose domain is
-  `prov:Activity`, so an RDFS reasoner would infer that the document is an
-  activity. `session` and `ai_assisted` are strings where PROV-O expects an
-  Activity and an Agent. The triples read back faithfully, but they aren't
-  strict PROV.
 - **`review_maturity` maps to `schema:creativeWorkStatus`**, a schema.org
   term, because neither `dcterms:` nor `prov:` has an equivalent.
 
@@ -424,6 +418,12 @@ give the full result shapes.
 [`examples/metadata-schema.edn`](examples/metadata-schema.edn) is a commented
 starting point; [`examples/context.jsonld`](examples/context.jsonld) is the
 matching JSON-LD context.
+Keys with no exact Dublin Core or PROV-O term map to the temper vocabulary,
+[`vocab/temper.ttl`](vocab/temper.ttl), namespace `https://w3id.org/temper#`
+(the w3id.org redirect is not registered yet, so the IRIs don't resolve). The
+PROV-O terms describe activities and agents, while these keys sit on the
+document and hold strings, so mapping them to `prov:` directly would make an
+RDFS reasoner infer that each document is an activity.
 
 | Key | Type | Read by | If absent | If empty |
 |---|---|---|---|---|

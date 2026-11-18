@@ -1,0 +1,55 @@
+# temper vocabulary: terms for document-metadata keys that have no exact
+# Dublin Core or PROV-O equivalent.
+#
+# Namespace: https://w3id.org/temper#
+#
+# Why not prov: directly? prov:used and prov:wasGeneratedBy describe an
+# activity, and prov:wasAttributedTo expects an agent node. temper's
+# frontmatter is flat: these keys sit on the document and hold strings. Mapped
+# to prov: terms, an RDFS reasoner would infer that each document is a
+# prov:Activity. These terms carry the same meaning without domain or range
+# constraints, and rdfs:seeAlso names the PROV-O term each one approximates.
+#
+# Every temper: term used in examples/context.jsonld must be defined here,
+# and every term defined here must be used there (test/temper/okf/vocab_test.clj).
+
+@prefix temper: <https://w3id.org/temper#> .
+@prefix rdf:    <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:   <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl:    <http://www.w3.org/2002/07/owl#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix prov:   <http://www.w3.org/ns/prov#> .
+
+<https://w3id.org/temper>
+    a owl:Ontology ;
+    rdfs:label "temper vocabulary" ;
+    dcterms:description "Terms for OKF document frontmatter that Dublin Core Terms and PROV-O do not cover exactly." ;
+    rdfs:seeAlso <https://github.com/lambduhh/temper> .
+
+temper:aiAssisted
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "AI assisted" ;
+    rdfs:comment "Free-text name of the AI model and interface that drafted the document, e.g. \"Claude Opus 5 via Claude Code\". Frontmatter key: ai_assisted." ;
+    rdfs:seeAlso prov:wasAttributedTo, prov:SoftwareAgent .
+
+temper:session
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "session" ;
+    rdfs:comment "Identifier of the AI session that generated the document. A correlation key, not a resolvable activity. Frontmatter key: session." ;
+    rdfs:seeAlso prov:wasGeneratedBy .
+
+temper:tool
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "tool" ;
+    rdfs:comment "A tool or data source available to the session that generated the document. Frontmatter key: tools (one value per list item)." ;
+    rdfs:seeAlso prov:used .
+
+temper:agentSkill
+    a rdf:Property ;
+    rdfs:isDefinedBy <https://w3id.org/temper> ;
+    rdfs:label "agent skill" ;
+    rdfs:comment "An agent or skill definition applied while generating the document, ideally a commit-pinned URL. Frontmatter key: agents_skills (one value per list item)." ;
+    rdfs:seeAlso prov:used .
