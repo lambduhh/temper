@@ -279,3 +279,19 @@
   (testing "a block-scalar note is replaced whole, not left dangling (review finding)"
     (let [out (fm/set-keys "---\nreview_note: >-\n  long\n  note\ntype: X\n---\nB\n" [["review_note" "\"new\""]])]
       (is (= "---\nreview_note: \"new\"\ntype: X\n---\nB\n" out)))))
+
+(deftest lowering-removes-verified-under-okf-0-2
+  (doseq [[version keeps?] [["0.2" false] [nil true]]]
+    (testing (str "okf-version " (pr-str version))
+      (let [{:keys [top dir f]} (repo)
+            verified "verified: { by: \"human:x\", at: 2026-11-11T10:00:00Z }\n"]
+        (spit (str (fs/path dir "docs/metadata-schema.edn"))
+              (pr-str (cond-> schema version (assoc :okf-version version))))
+        (spit f (str/replace (slurp f) "review_note:" (str verified "review_note:")))
+        (commit! top "verified")
+        (spit f (str/replace (slurp f) #"w(1\d) " "z$1 "))   ; 20% of words: lowered
+        (is (= ["docs/a.md"] (map :path (:lowered (d/run {:root dir})))))
+        (let [out (slurp f)]
+          (is (str/includes? out "review_maturity: L1 (Human-directed)\n"))
+          (is (= keeps? (str/includes? out verified)))
+          (is (str/includes? out " w9 z10 z11 ") "body untouched"))))))

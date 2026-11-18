@@ -185,3 +185,39 @@
       (is (= 1 (:exit (quietly #(new-doc/run (assoc base :path (str docs-dir "/a.md")))))))
       (is (= 0 (:exit (quietly #(new-doc/run (assoc base :path (str docs-dir "/a.md") :force true)))))))
     (is (= {:exit 2} (select-keys (quietly #(new-doc/run (assoc base :schema "/nonexistent.edn"))) [:exit])))))
+
+(deftest new-doc-writes-generated-under-okf-0-2
+  (let [{:keys [docs-dir schema]} (bundle! "clean" :edit #(-> %
+                                                             (assoc :okf-version "0.2" :context-file "")
+                                                             (update :known-keys conj :generated)))
+        _ (spit (str docs-dir "/index.md") "---\nokf_version: \"0.2\"\n---\n\n# Index\n")
+        base {:docs-dir docs-dir :schema schema :type "Research" :title "T"
+              :ai-assisted "Claude via Claude Code" :session "s1" :tools ["babashka"]
+              :today "2026-01-02" :now "2026-01-02T03:04:05Z"}]
+    (testing "with --generated-by: a { by, at } mapping that validates"
+      (let [path (str docs-dir "/g.md")
+            r (quietly #(new-doc/run (assoc base :path path :generated-by "claude-code/claude-opus-5-5")))]
+        (is (= 0 (:exit r)) (:error r))
+        (is (str/includes? (:text r) "generated: { by: \"claude-code/claude-opus-5-5\", at: 2026-01-02T03:04:05Z }\n"))
+        (is (= {:path path :errors [] :warnings []}
+               (first (filter #(= path (:path %))
+                              (:results (quietly #(validate/run {:docs-dir docs-dir :schema schema})))))))))
+    (testing "AI-assisted without it: a usage error naming the flag"
+      (let [r (quietly #(new-doc/run (assoc base :path (str docs-dir "/n.md"))))]
+        (is (= 1 (:exit r)))
+        (is (str/includes? (:error r) "--generated-by is required"))))
+    (testing "not an actor: a usage error"
+      (let [r (quietly #(new-doc/run (assoc base :path (str docs-dir "/b.md") :generated-by "Claude Opus")))]
+        (is (= 1 (:exit r)))
+        (is (str/includes? (:error r) "is not an OKF actor"))))
+    (testing "human-authored: optional"
+      (let [r (quietly #(new-doc/run (-> base (dissoc :ai-assisted :session :tools) (assoc :path (str docs-dir "/h.md")))))]
+        (is (= 0 (:exit r)))
+        (is (not (str/includes? (:text r) "generated:"))))))
+  (testing "a 0.1 bundle ignores the flag, with a warning"
+    (let [{:keys [docs-dir schema]} (bundle! "clean")
+          r (quietly #(new-doc/run {:docs-dir docs-dir :schema schema :type "Research" :title "T"
+                                    :path (str docs-dir "/o.md") :generated-by "human:x"}))]
+      (is (= 0 (:exit r)))
+      (is (not (str/includes? (:text r) "generated:")))
+      (is (some #(str/includes? % "--generated-by ignored") (:warnings r))))))

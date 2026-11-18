@@ -170,10 +170,6 @@
   every timestamp-valued key."
   #"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})")
 
-(def ^:private actor-re
-  "OKF v0.2 §7: human:<id>, process:<id>, or <producer>/<version>."
-  #"(human|process):\S+|[^\s:/]+/\S+")
-
 (defn- key-block
   "The raw text of top-level key `k` in frontmatter `fm`: its line plus any
   indented continuation lines, or nil."
@@ -197,7 +193,7 @@
         actor! (fn [where v]
                  (cond
                    (str/blank? (str v)) (err! (str where " is required — an OKF actor such as `human:<id>`, `process:<id>` or `<producer>/<version>` (OKF v0.2 §7)"))
-                   (not (re-matches actor-re (str v))) (err! (str where " " (pr-str (str v)) " is not an OKF actor — use `human:<id>`, `process:<id>` or `<producer>/<version>`, e.g. claude-code/claude-opus-5-5 (OKF v0.2 §7)"))))
+                   (not (schema/okf-actor? (str v))) (err! (str where " " (pr-str (str v)) " is not an OKF actor — use `human:<id>`, `process:<id>` or `<producer>/<version>`, e.g. claude-code/claude-opus-5-5 (OKF v0.2 §7)"))))
         times! (fn [k fields]
                  (doseq [[f v] (raw-timestamps (key-block fm k) fields)
                          :when (not (re-matches offset-datetime v))]
