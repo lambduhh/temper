@@ -68,12 +68,13 @@ In 1985 Peter Naur argued, in
 [*Programming as Theory Building*](https://pages.cs.wisc.edu/~remzi/Naur.pdf),
 that a program is a theory held by the people who built it, and that the text
 is only a projection of it. Generated context makes it possible to produce the
-projection without anyone ever holding the theory. AI can generate plausible
-artifacts, but it can't establish that they're true. Only a person can make
-that claim, and ownership you can't check is just a name in a file. So the
-claims about a document move out of prose and into data: what kind of thing it
-is, what produced it, who reviewed which version, and when. They live in YAML
-frontmatter, and the rules for them live in one EDN schema.
+projection without anyone ever holding the theory. Once producing it costs
+almost nothing, the cost moves to checking it and living with it. AI can
+generate plausible artifacts, but it can't establish that they're true. Only a
+person can make that claim, and ownership you can't check is just a name in a
+file. So the claims about a document move out of prose and into data: what kind
+of thing it is, what produced it, who reviewed which version, and when. They
+live in YAML frontmatter, and the rules for them live in one EDN schema.
 
 Data alone isn't enough. A key called `reviewed` means whatever its author
 meant that day. The keys need semantics defined outside this project, and two
